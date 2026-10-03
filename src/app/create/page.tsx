@@ -16,7 +16,7 @@ export default function CreatePage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-        {/* Blog Post Generator (Phase 4 Ready) */}
+        {/* Blog Post Generator */}
         <Card className="hover:border-brand-500/60 transition-all flex flex-col justify-between p-6 bg-studio-900/60">
           <CardHeader className="p-0 pb-4">
             <div className="h-12 w-12 rounded-xl bg-brand-950/80 border border-brand-800/60 flex items-center justify-center text-brand-400 mb-3">
@@ -39,8 +39,8 @@ export default function CreatePage() {
           </div>
         </Card>
 
-        {/* Case Study Generator (Coming in Phase 7) */}
-        <Card className="hover:border-emerald-500/40 transition-all flex flex-col justify-between p-6 bg-studio-900/60">
+        {/* Case Study Generator */}
+        <Card className="hover:border-emerald-500/60 transition-all flex flex-col justify-between p-6 bg-studio-900/60">
           <CardHeader className="p-0 pb-4">
             <div className="h-12 w-12 rounded-xl bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center text-emerald-400 mb-3">
               <TrendingUp className="h-6 w-6" />
@@ -52,10 +52,13 @@ export default function CreatePage() {
             </CardDescription>
           </CardHeader>
           <div className="pt-4">
-            <Button variant="secondary" size="md" className="w-full gap-2" disabled>
-              <Sparkles className="h-4 w-4" />
-              <span>Coming in Phase 7</span>
-            </Button>
+            <Link href="/create/case-study">
+              <Button variant="primary" size="md" className="w-full gap-2 bg-emerald-600 hover:bg-emerald-500">
+                <Sparkles className="h-4 w-4" />
+                <span>Launch Case Study Generator</span>
+                <ArrowRight className="h-4 w-4 ml-auto" />
+              </Button>
+            </Link>
           </div>
         </Card>
       </div>
