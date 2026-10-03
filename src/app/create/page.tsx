@@ -1,38 +1,36 @@
 import Link from "next/link";
-import { FileText, TrendingUp, Sparkles, ArrowRight } from "lucide-react";
+import { FileText, TrendingUp, ArrowRight, Sparkles } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 export default function CreatePage() {
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">
-          Create New Content
+    <div className="space-y-6 max-w-4xl mx-auto">
+      <div className="pb-4 border-b border-slate-200">
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+          Create Content
         </h1>
-        <p className="text-sm text-studio-400 mt-1">
-          Select an autonomous multi-agent content generation engine
+        <p className="text-sm text-slate-500 mt-1">
+          Select a content format and configure generation parameters.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
         {/* Blog Post Generator */}
-        <Card className="hover:border-brand-500/60 transition-all flex flex-col justify-between p-6 bg-studio-900/60">
+        <Card className="hover:border-orange-300 hover:shadow-sm transition-all flex flex-col justify-between p-6">
           <CardHeader className="p-0 pb-4">
-            <div className="h-12 w-12 rounded-xl bg-brand-950/80 border border-brand-800/60 flex items-center justify-center text-brand-400 mb-3">
-              <FileText className="h-6 w-6" />
+            <div className="h-10 w-10 rounded-lg bg-orange-50 border border-orange-200 flex items-center justify-center text-orange-600 mb-3">
+              <FileText className="h-5 w-5" />
             </div>
-            <CardTitle className="text-xl">Autonomous Blog Generator</CardTitle>
-            <CardDescription className="mt-2 text-sm leading-relaxed text-studio-400">
-              Full autonomous multi-agent pipeline: Research Agent → Content Strategist →
-              Writer Agent → SEO Optimizer → QA Reviewer → Image Prompter.
+            <CardTitle className="text-lg text-slate-900">Blog Post</CardTitle>
+            <CardDescription className="mt-1.5 text-xs text-slate-500 leading-relaxed">
+              Research-backed technical articles, guides, and opinion pieces with SEO metadata and structured headings.
             </CardDescription>
           </CardHeader>
-          <div className="pt-4">
+          <div className="pt-4 border-t border-slate-100">
             <Link href="/create/blog">
-              <Button variant="primary" size="md" className="w-full gap-2">
-                <Sparkles className="h-4 w-4" />
-                <span>Launch Blog Generator</span>
+              <Button variant="primary" size="default" className="w-full gap-2 font-semibold h-9">
+                <span>Configure Blog Post</span>
                 <ArrowRight className="h-4 w-4 ml-auto" />
               </Button>
             </Link>
@@ -40,22 +38,20 @@ export default function CreatePage() {
         </Card>
 
         {/* Case Study Generator */}
-        <Card className="hover:border-emerald-500/60 transition-all flex flex-col justify-between p-6 bg-studio-900/60">
+        <Card className="hover:border-slate-300 hover:shadow-sm transition-all flex flex-col justify-between p-6">
           <CardHeader className="p-0 pb-4">
-            <div className="h-12 w-12 rounded-xl bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center text-emerald-400 mb-3">
-              <TrendingUp className="h-6 w-6" />
+            <div className="h-10 w-10 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 mb-3">
+              <TrendingUp className="h-5 w-5" />
             </div>
-            <CardTitle className="text-xl">B2B Case Study Generator</CardTitle>
-            <CardDescription className="mt-2 text-sm leading-relaxed text-studio-400">
-              Transform technical architectures, business challenges, and ROI metrics
-              into structured, high-conversion proof points.
+            <CardTitle className="text-lg text-slate-900">Case Study</CardTitle>
+            <CardDescription className="mt-1.5 text-xs text-slate-500 leading-relaxed">
+              Customer success stories detailing business challenges, architectural solutions, and quantified results.
             </CardDescription>
           </CardHeader>
-          <div className="pt-4">
+          <div className="pt-4 border-t border-slate-100">
             <Link href="/create/case-study">
-              <Button variant="primary" size="md" className="w-full gap-2 bg-emerald-600 hover:bg-emerald-500">
-                <Sparkles className="h-4 w-4" />
-                <span>Launch Case Study Generator</span>
+              <Button variant="outline" size="default" className="w-full gap-2 font-semibold h-9 hover:border-slate-400">
+                <span>Configure Case Study</span>
                 <ArrowRight className="h-4 w-4 ml-auto" />
               </Button>
             </Link>

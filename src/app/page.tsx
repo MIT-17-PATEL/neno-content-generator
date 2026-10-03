@@ -6,22 +6,29 @@ import {
   FileText,
   Clock,
   CheckCircle2,
-  Sparkles,
   ArrowRight,
   TrendingUp,
   Layers,
-  BookOpen,
   Plus,
   Eye,
+  ExternalLink,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/auth-context";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
 import { ContentItem } from "@/types";
 
 export default function DashboardPage() {
-  const { activeWorkspace } = useAuth();
+  const { user, activeWorkspace } = useAuth();
   const [stats, setStats] = useState({
     total: 0,
     drafts: 0,
@@ -52,216 +59,235 @@ export default function DashboardPage() {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
-  const statCards = [
-    {
-      title: "Total Content",
-      value: stats.total.toString(),
-      description: "Across all categories",
-      icon: Layers,
-    },
-    {
-      title: "Drafts & Generating",
-      value: stats.drafts.toString(),
-      description: "In progress or queued",
-      icon: Clock,
-    },
-    {
-      title: "In Review",
-      value: stats.inReview.toString(),
-      description: "Awaiting human review",
-      icon: BookOpen,
-    },
-    {
-      title: "Approved & Exported",
-      value: stats.approved.toString(),
-      description: "Production ready",
-      icon: CheckCircle2,
-    },
-  ];
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "approved":
+      case "published":
+      case "exported":
+        return <Badge variant="success">Published</Badge>;
+      case "in_review":
+        return <Badge variant="warning">In Review</Badge>;
+      case "generating":
+        return <Badge variant="primary">Generating</Badge>;
+      default:
+        return <Badge variant="secondary">Draft</Badge>;
+    }
+  };
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
-      {/* Top Welcome / Action Bar */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-studio-800/60 pb-6">
+    <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-2xl font-bold text-white tracking-tight">
-              Content Dashboard
-            </h1>
-            <Badge variant="info">{activeWorkspace?.name || "Workspace"}</Badge>
-          </div>
-          <p className="text-sm text-studio-400">
-            Autonomous multi-agent content generation & editorial control center
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            Welcome back{user?.name ? `, ${user.name.split(" ")[0]}` : ""}
+          </h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Create, manage, and review autonomous content for{" "}
+            <span className="font-semibold text-slate-700">{activeWorkspace?.name || "your workspace"}</span>.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Link href="/create?type=case-study">
-            <Button variant="secondary" size="md">
-              New Case Study
-            </Button>
-          </Link>
-          <Link href="/create?type=blog">
-            <Button variant="primary" size="md" className="gap-2">
-              <Sparkles className="h-4 w-4" />
-              <span>Create Blog Post</span>
+        <div className="flex items-center gap-2">
+          <Link href="/create">
+            <Button variant="primary" size="default" className="gap-1.5 h-9 font-semibold">
+              <Plus className="h-4 w-4" />
+              <span>Create Content</span>
             </Button>
           </Link>
         </div>
       </div>
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        {statCards.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={stat.title} className="relative overflow-hidden">
-              <div className="flex items-center justify-between pb-2">
-                <span className="text-xs font-medium text-studio-400">
-                  {stat.title}
-                </span>
-                <div className="p-2 rounded-lg bg-studio-800/80 text-studio-300">
-                  <Icon className="h-4 w-4" />
-                </div>
-              </div>
-              <div className="text-3xl font-bold text-white tracking-tight mt-1">
-                {isLoading ? "..." : stat.value}
-              </div>
-              <p className="text-xs text-studio-500 mt-1">{stat.description}</p>
-            </Card>
-          );
-        })}
+      {/* Metrics Row (Compact Stat Cards) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Content */}
+        <Card className="p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-xs font-semibold uppercase tracking-wider">Total Content</span>
+            <Layers className="h-4 w-4 text-slate-400" />
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-bold text-slate-900">
+              {isLoading ? "—" : stats.total}
+            </div>
+            <p className="text-xs text-slate-500 mt-1">Across all categories</p>
+          </div>
+        </Card>
+
+        {/* Drafts */}
+        <Card className="p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-xs font-semibold uppercase tracking-wider">Drafts</span>
+            <Clock className="h-4 w-4 text-slate-400" />
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-bold text-slate-900">
+              {isLoading ? "—" : stats.drafts}
+            </div>
+            <p className="text-xs text-slate-500 mt-1">In progress & queued</p>
+          </div>
+        </Card>
+
+        {/* In Review */}
+        <Card className="p-5 flex flex-col justify-between border-l-4 border-l-amber-500">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-xs font-semibold uppercase tracking-wider">In Review</span>
+            <span className="h-2 w-2 rounded-full bg-amber-500" />
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-bold text-slate-900">
+              {isLoading ? "—" : stats.inReview}
+            </div>
+            <p className="text-xs text-slate-500 mt-1">Awaiting editorial review</p>
+          </div>
+        </Card>
+
+        {/* Published */}
+        <Card className="p-5 flex flex-col justify-between border-l-4 border-l-emerald-500">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-xs font-semibold uppercase tracking-wider">Published</span>
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-bold text-slate-900">
+              {isLoading ? "—" : stats.approved}
+            </div>
+            <p className="text-xs text-emerald-600 font-medium mt-1">Production ready</p>
+          </div>
+        </Card>
       </div>
 
       {/* Quick Launch Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="hover:border-studio-700 transition-colors">
-          <CardHeader>
-            <div className="h-10 w-10 rounded-lg bg-brand-950/80 border border-brand-800/60 flex items-center justify-center text-brand-400 mb-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="p-5 hover:border-slate-300 transition-colors">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-lg bg-orange-50 border border-orange-200 text-orange-600 shrink-0">
               <FileText className="h-5 w-5" />
             </div>
-            <CardTitle>Autonomous Blog Generator</CardTitle>
-            <CardDescription>
-              Research, outline, write, and optimize full-length articles with SEO
-              metadata, keyword strategy, and featured visual briefs.
-            </CardDescription>
-          </CardHeader>
-          <div className="pt-2">
-            <Link href="/create?type=blog">
-              <Button variant="outline" size="sm" className="gap-2">
-                <span>Configure Blog Workflow</span>
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Button>
-            </Link>
+            <div className="space-y-1 min-w-0">
+              <h3 className="text-sm font-semibold text-slate-900">Blog Post Generator</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Generate structured, SEO-optimized technical blog posts and industry articles with verified citations.
+              </p>
+              <div className="pt-2">
+                <Link href="/create?type=blog">
+                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+                    <span>New Blog Post</span>
+                    <ArrowRight className="h-3 w-3" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
           </div>
         </Card>
 
-        <Card className="hover:border-studio-700 transition-colors">
-          <CardHeader>
-            <div className="h-10 w-10 rounded-lg bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center text-emerald-400 mb-2">
+        <Card className="p-5 hover:border-slate-300 transition-colors">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 shrink-0">
               <TrendingUp className="h-5 w-5" />
             </div>
-            <CardTitle>B2B Case Study Generator</CardTitle>
-            <CardDescription>
-              Transform client metrics, technical architectures, and business
-              challenges into structured, high-conversion proof points.
-            </CardDescription>
-          </CardHeader>
-          <div className="pt-2">
-            <Link href="/create?type=case-study">
-              <Button variant="outline" size="sm" className="gap-2">
-                <span>Configure Case Study</span>
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Button>
-            </Link>
+            <div className="space-y-1 min-w-0">
+              <h3 className="text-sm font-semibold text-slate-900">Case Study Generator</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Formulate data-driven customer success stories with challenge, solution, and impact metrics.
+              </p>
+              <div className="pt-2">
+                <Link href="/create?type=case-study">
+                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+                    <span>New Case Study</span>
+                    <ArrowRight className="h-3 w-3" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
           </div>
         </Card>
       </div>
 
-      {/* Recent Activity Table */}
+      {/* Recent Content Table */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-4">
+        <CardHeader className="flex flex-row items-center justify-between p-5 border-b border-slate-100">
           <div>
-            <CardTitle>Recent Content Items</CardTitle>
-            <CardDescription>
-              Articles and case studies in <strong>{activeWorkspace?.name}</strong>
+            <CardTitle className="text-base font-semibold text-slate-900">
+              Recent Content
+            </CardTitle>
+            <CardDescription className="text-xs text-slate-500 mt-0.5">
+              Latest documents in {activeWorkspace?.name || "Workspace"}
             </CardDescription>
           </div>
           <Link href="/content">
-            <Button variant="ghost" size="sm" className="gap-1 text-xs">
+            <Button variant="ghost" size="sm" className="text-xs gap-1 text-slate-600 hover:text-slate-900">
               <span>View All</span>
               <ArrowRight className="h-3 w-3" />
             </Button>
           </Link>
         </CardHeader>
 
-        {isLoading ? (
-          <div className="p-8 text-center text-xs text-studio-500">
-            Loading dashboard data...
-          </div>
-        ) : recentItems.length === 0 ? (
-          <div className="border border-dashed border-studio-800 rounded-lg p-12 text-center">
-            <p className="text-sm text-studio-400">
-              No content items generated yet in this workspace.
-            </p>
-            <p className="text-xs text-studio-500 mt-1">
-              Start by creating a new manual draft or initiating an autonomous generation workflow above.
-            </p>
-            <Link href="/content">
-              <Button variant="primary" size="sm" className="mt-4 gap-1.5">
-                <Plus className="h-3.5 w-3.5" />
-                <span>Create Content Item</span>
-              </Button>
-            </Link>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {recentItems.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between p-3.5 rounded-lg border border-studio-800 bg-studio-950/60 hover:border-studio-700 transition-colors"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div
-                    className={`h-7 w-7 rounded flex items-center justify-center shrink-0 ${
-                      item.type === "blog"
-                        ? "bg-brand-950 text-brand-400"
-                        : "bg-emerald-950 text-emerald-400"
-                    }`}
-                  >
-                    {item.type === "blog" ? (
-                      <FileText className="h-3.5 w-3.5" />
-                    ) : (
-                      <TrendingUp className="h-3.5 w-3.5" />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <Link
-                      href={`/content/${item.id}`}
-                      className="text-xs font-semibold text-white hover:text-brand-400 transition-colors truncate block"
-                    >
-                      {item.title}
-                    </Link>
-                    <span className="text-[11px] text-studio-500">
-                      Category: {item.category} • Updated:{" "}
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="p-8 text-center text-xs text-slate-400">Loading content...</div>
+          ) : recentItems.length === 0 ? (
+            <div className="p-12 text-center">
+              <p className="text-sm font-medium text-slate-700">No content items found</p>
+              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                Get started by creating your first article or generating a case study.
+              </p>
+              <Link href="/create">
+                <Button variant="primary" size="sm" className="mt-4 gap-1.5 h-8 text-xs">
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Create Content</span>
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12">#</TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Updated</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentItems.map((item, idx) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="text-xs text-slate-400 font-mono">
+                      {(idx + 1).toString().padStart(2, "0")}
+                    </TableCell>
+                    <TableCell className="font-semibold text-slate-900">
+                      <Link
+                        href={`/content/${item.id}`}
+                        className="hover:text-orange-600 transition-colors line-clamp-1"
+                      >
+                        {item.title}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-xs capitalize text-slate-600">
+                      {item.type.replace("-", " ")}
+                    </TableCell>
+                    <TableCell className="text-xs text-slate-500">
+                      {item.category}
+                    </TableCell>
+                    <TableCell>{getStatusBadge(item.status)}</TableCell>
+                    <TableCell className="text-xs text-slate-500">
                       {new Date(item.updatedAt || Date.now()).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 shrink-0">
-                  <Badge variant={item.status === "approved" ? "success" : item.status === "in_review" ? "warning" : "outline"}>
-                    {item.status.replace("_", " ")}
-                  </Badge>
-                  <Link href={`/content/${item.id}`}>
-                    <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs">
-                      <Eye className="h-3 w-3" />
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Link href={`/content/${item.id}`}>
+                        <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
       </Card>
     </div>
   );

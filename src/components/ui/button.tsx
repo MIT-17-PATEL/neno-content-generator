@@ -3,33 +3,39 @@ import { cn } from "@/lib/utils";
 
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "outline" | "ghost" | "danger";
-  size?: "sm" | "md" | "lg";
+  variant?:
+    | "default"
+    | "primary"
+    | "secondary"
+    | "outline"
+    | "ghost"
+    | "destructive"
+    | "link";
+  size?: "default" | "sm" | "lg" | "icon";
 }
 
-export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  (
-    { className, variant = "primary", size = "md", children, ...props },
-    ref
-  ) => {
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant = "default", size = "default", ...props }, ref) => {
     const baseStyles =
-      "inline-flex items-center justify-center font-medium rounded-lg transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-brand-500/50 disabled:opacity-50 disabled:cursor-not-allowed";
+      "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 select-none";
 
     const variantStyles = {
-      primary:
-        "bg-brand-600 hover:bg-brand-500 text-white shadow-sm shadow-brand-950",
-      secondary:
-        "bg-studio-800 hover:bg-studio-700 text-studio-100 border border-studio-700/60",
+      default: "bg-primary text-primary-foreground hover:bg-primary-dark shadow-sm",
+      primary: "bg-primary text-primary-foreground hover:bg-primary-dark shadow-sm",
+      secondary: "bg-slate-100 text-slate-900 hover:bg-slate-200 border border-slate-200/80",
       outline:
-        "border border-studio-700 hover:bg-studio-800/80 text-studio-200",
-      ghost: "hover:bg-studio-800/60 text-studio-300 hover:text-white",
-      danger: "bg-red-600 hover:bg-red-500 text-white",
+        "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-sm",
+      ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+      destructive:
+        "bg-red-600 text-white hover:bg-red-700 shadow-sm",
+      link: "text-primary underline-offset-4 hover:underline",
     };
 
     const sizeStyles = {
-      sm: "px-3 py-1.5 text-xs gap-1.5",
-      md: "px-4 py-2 text-sm gap-2",
-      lg: "px-5 py-2.5 text-base gap-2.5",
+      default: "h-9 px-4 py-2",
+      sm: "h-8 rounded-md px-3 text-xs",
+      lg: "h-10 rounded-md px-6 text-base",
+      icon: "h-9 w-9",
     };
 
     return (
@@ -37,11 +43,10 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         className={cn(baseStyles, variantStyles[variant], sizeStyles[size], className)}
         {...props}
-      >
-        {children}
-      </button>
+      />
     );
   }
 );
-
 Button.displayName = "Button";
+
+export { Button };

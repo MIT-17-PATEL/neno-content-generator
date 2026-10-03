@@ -7,41 +7,37 @@ import {
   Sparkles,
   Upload,
   Search,
-  Filter,
   Trash2,
   Copy,
   Check,
   Download,
-  ExternalLink,
   Layers,
   Wand2,
   RefreshCw,
   Eye,
   X,
   FileText,
-  SlidersHorizontal,
   HardDrive,
-  Info,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/auth-context";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MediaAsset, MediaType, ImageAspectRatio, ImageStylePreset, ContentItem } from "@/types";
 
 const STYLE_OPTIONS: Array<{ id: ImageStylePreset; label: string; desc: string }> = [
-  { id: "dark_tech", label: "Dark Tech Isometric", desc: "Slate glass, glowing cyan/emerald data channels, volumetric lighting" },
-  { id: "minimalist_vector", label: "Minimalist Vector", desc: "Swiss modernist flat vector shapes, refined monochrome palette" },
-  { id: "architectural_blueprint", label: "Architectural Blueprint", desc: "Technical CAD schematics, cyan grid wireframes, engineering aesthetic" },
-  { id: "editorial_photo", label: "Editorial Photo", desc: "Corporate studio lighting, natural depth of field, executive look" },
+  { id: "dark_tech", label: "Dark Tech Isometric", desc: "Slate glass, glowing data channels, volumetric lighting" },
+  { id: "minimalist_vector", label: "Minimalist Vector", desc: "Swiss modernist flat vector shapes, refined palette" },
+  { id: "architectural_blueprint", label: "Architectural Blueprint", desc: "Technical CAD schematics, wireframes, engineering aesthetic" },
+  { id: "editorial_photo", label: "Editorial Photo", desc: "Corporate studio lighting, natural depth of field" },
   { id: "isometric_3d", label: "Isometric 3D Cloud", desc: "Floating infrastructure platforms, microchips, data conduits" },
 ];
 
 const ASPECT_RATIOS: Array<{ id: ImageAspectRatio; label: string; ratioClass: string }> = [
-  { id: "16:9", label: "16:9 Landscape (Hero)", ratioClass: "aspect-video" },
-  { id: "1:1", label: "1:1 Square (Social)", ratioClass: "aspect-square" },
-  { id: "4:3", label: "4:3 Standard (Card)", ratioClass: "aspect-[4/3]" },
-  { id: "9:16", label: "9:16 Story (Mobile)", ratioClass: "aspect-[9/16]" },
+  { id: "16:9", label: "16:9 (Hero)", ratioClass: "aspect-video" },
+  { id: "1:1", label: "1:1 (Square)", ratioClass: "aspect-square" },
+  { id: "4:3", label: "4:3 (Card)", ratioClass: "aspect-[4/3]" },
+  { id: "9:16", label: "9:16 (Mobile)", ratioClass: "aspect-[9/16]" },
 ];
 
 export default function MediaPage() {
@@ -61,8 +57,8 @@ export default function MediaPage() {
   // Generate State
   const [genTopic, setGenTopic] = useState("");
   const [genContentId, setGenContentId] = useState("");
-  const [genCategory, setGenCategory] = useState("Engineering");
-  const [genStyle, setGenStyle] = useState<ImageStylePreset>("dark_tech");
+  const [genCategory] = useState("Engineering");
+  const [genStyle, setGenStyle] = useState<ImageStylePreset>("minimalist_vector");
   const [genRatio, setGenRatio] = useState<ImageAspectRatio>("16:9");
   const [genCustomPrompt, setGenCustomPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -146,7 +142,7 @@ export default function MediaPage() {
       setGenTopic("");
       setGenCustomPrompt("");
       setPreviewAsset(data.asset);
-    } catch (err) {
+    } catch {
       setGenError("Network error during image generation");
     } finally {
       setIsGenerating(false);
@@ -184,7 +180,7 @@ export default function MediaPage() {
       setUploadFile(null);
       setUploadTitle("");
       setUploadAltText("");
-    } catch (err) {
+    } catch {
       setUploadError("Network error during file upload");
     } finally {
       setIsUploading(false);
@@ -234,34 +230,33 @@ export default function MediaPage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-studio-800/60 pb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
-          <div className="flex items-center space-x-3">
-            <h1 className="text-2xl font-bold text-white tracking-tight">
-              Media & Visual Assets
+          <div className="flex items-center space-x-2">
+            <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">
+              Media & Assets
             </h1>
-            <Badge variant="success" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
-              Phase 10 Active
+            <Badge variant="outline" className="text-[11px] font-normal text-slate-600 bg-slate-100">
+              Media Library
             </Badge>
           </div>
-          <p className="text-sm text-studio-400 mt-1">
-            Generate featured hero imagery, architectural diagrams, vector infographics, and manage S3 media.
+          <p className="text-sm text-slate-500 mt-0.5">
+            Generate and manage featured hero imagery, diagrams, and media for your articles.
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2.5">
           <Button
             variant="outline"
-            className="border-studio-700 bg-studio-900/50 hover:bg-studio-800 text-studio-200"
+            className="border-slate-200 text-slate-700 hover:bg-slate-50"
             onClick={() => setIsUploadOpen(true)}
           >
-            <Upload className="w-4 h-4 mr-2" />
+            <Upload className="w-4 h-4 mr-2 text-slate-500" />
             Upload Asset
           </Button>
 
           <Button
-            variant="primary"
-            className="bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20"
+            className="bg-orange-600 hover:bg-orange-700 text-white font-medium"
             onClick={() => setIsGenerateOpen(true)}
           >
             <Sparkles className="w-4 h-4 mr-2" />
@@ -271,51 +266,51 @@ export default function MediaPage() {
       </div>
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-studio-900/40 border-studio-800 p-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="bg-white border-slate-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-studio-400 font-medium">Total Assets</p>
-              <p className="text-2xl font-bold text-white mt-1">{assets.length}</p>
+              <p className="text-xs text-slate-500 font-medium">Total Assets</p>
+              <p className="text-2xl font-bold text-slate-900 mt-1">{assets.length}</p>
             </div>
-            <div className="p-3 bg-studio-800/50 rounded-lg text-studio-300">
+            <div className="p-2.5 bg-slate-100 rounded-lg text-slate-600">
               <ImageIcon className="w-5 h-5" />
             </div>
           </div>
         </Card>
 
-        <Card className="bg-studio-900/40 border-studio-800 p-4">
+        <Card className="bg-white border-slate-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-studio-400 font-medium">Featured Visuals</p>
-              <p className="text-2xl font-bold text-emerald-400 mt-1">{featuredCount}</p>
+              <p className="text-xs text-slate-500 font-medium">Featured Images</p>
+              <p className="text-2xl font-bold text-slate-900 mt-1">{featuredCount}</p>
             </div>
-            <div className="p-3 bg-emerald-500/10 rounded-lg text-emerald-400">
+            <div className="p-2.5 bg-orange-50 rounded-lg text-orange-600">
               <Wand2 className="w-5 h-5" />
             </div>
           </div>
         </Card>
 
-        <Card className="bg-studio-900/40 border-studio-800 p-4">
+        <Card className="bg-white border-slate-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-studio-400 font-medium">Diagrams & Vectors</p>
-              <p className="text-2xl font-bold text-indigo-400 mt-1">{diagramCount}</p>
+              <p className="text-xs text-slate-500 font-medium">Diagrams & Vectors</p>
+              <p className="text-2xl font-bold text-slate-900 mt-1">{diagramCount}</p>
             </div>
-            <div className="p-3 bg-indigo-500/10 rounded-lg text-indigo-400">
+            <div className="p-2.5 bg-slate-100 rounded-lg text-slate-600">
               <Layers className="w-5 h-5" />
             </div>
           </div>
         </Card>
 
-        <Card className="bg-studio-900/40 border-studio-800 p-4">
+        <Card className="bg-white border-slate-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-studio-400 font-medium">Storage Engine</p>
-              <p className="text-sm font-semibold text-studio-200 mt-1">S3 / Vector Data</p>
-              <p className="text-[11px] text-studio-500">Zero data-loss storage</p>
+              <p className="text-xs text-slate-500 font-medium">Storage Engine</p>
+              <p className="text-sm font-semibold text-slate-800 mt-1">S3 Cloud Storage</p>
+              <p className="text-[11px] text-slate-400">Zero data-loss storage</p>
             </div>
-            <div className="p-3 bg-studio-800/50 rounded-lg text-studio-400">
+            <div className="p-2.5 bg-slate-100 rounded-lg text-slate-600">
               <HardDrive className="w-5 h-5" />
             </div>
           </div>
@@ -323,15 +318,15 @@ export default function MediaPage() {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-studio-900/30 p-4 rounded-xl border border-studio-800/60">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50/70 p-3 rounded-lg border border-slate-200">
         <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-studio-400" />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             placeholder="Search assets by title, prompt, or alt text..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-studio-950/60 border border-studio-800 rounded-lg text-sm text-white placeholder-studio-500 focus:outline-none focus:border-indigo-500"
+            className="w-full pl-9 pr-4 py-1.5 bg-white border border-slate-200 rounded-md text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
           />
         </div>
 
@@ -340,7 +335,7 @@ export default function MediaPage() {
           <select
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
-            className="bg-studio-950 border border-studio-800 rounded-lg px-3 py-2 text-xs text-studio-200 focus:outline-none focus:border-indigo-500"
+            className="bg-white border border-slate-200 rounded-md px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:border-orange-500 transition-colors"
           >
             <option value="all">All Types</option>
             <option value="featured_image">Featured Images</option>
@@ -353,7 +348,7 @@ export default function MediaPage() {
           <select
             value={selectedStyle}
             onChange={(e) => setSelectedStyle(e.target.value)}
-            className="bg-studio-950 border border-studio-800 rounded-lg px-3 py-2 text-xs text-studio-200 focus:outline-none focus:border-indigo-500"
+            className="bg-white border border-slate-200 rounded-md px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:border-orange-500 transition-colors"
           >
             <option value="all">All Styles</option>
             <option value="dark_tech">Dark Tech</option>
@@ -367,7 +362,7 @@ export default function MediaPage() {
             variant="ghost"
             size="sm"
             onClick={fetchMedia}
-            className="text-studio-400 hover:text-white"
+            className="text-slate-600 hover:text-slate-900"
           >
             <RefreshCw className="w-3.5 h-3.5 mr-1" />
             Refresh
@@ -377,33 +372,32 @@ export default function MediaPage() {
 
       {/* Asset Grid */}
       {isLoading ? (
-        <div className="py-24 text-center">
-          <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin mx-auto mb-3" />
-          <p className="text-sm text-studio-400">Loading media library assets...</p>
-        </div>
+        <Card className="p-16 text-center text-slate-500 text-sm bg-white border-slate-200">
+          <RefreshCw className="w-6 h-6 text-orange-600 animate-spin mx-auto mb-2" />
+          Loading media library assets...
+        </Card>
       ) : filteredAssets.length === 0 ? (
-        <Card className="border-dashed border-studio-800 bg-studio-950/20 p-16 text-center">
-          <div className="w-12 h-12 rounded-xl bg-studio-900 border border-studio-800 flex items-center justify-center mx-auto mb-4 text-studio-400">
+        <Card className="border-dashed border-slate-300 bg-white p-16 text-center">
+          <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-400">
             <ImageIcon className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-semibold text-white">No media assets found</h3>
-          <p className="text-xs text-studio-400 max-w-md mx-auto mt-1 mb-6">
-            Generate custom featured visuals, diagrams, or upload brand illustrations for your content.
+          <h3 className="text-base font-semibold text-slate-900">No media assets found</h3>
+          <p className="text-sm text-slate-500 max-w-md mx-auto mt-1 mb-5">
+            Generate custom visuals, diagrams, or upload brand illustrations for your content.
           </p>
           <div className="flex justify-center space-x-3">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setIsUploadOpen(true)}
-              className="border-studio-700 text-studio-300"
+              className="border-slate-200 text-slate-700"
             >
               Upload Asset
             </Button>
             <Button
-              variant="primary"
               size="sm"
               onClick={() => setIsGenerateOpen(true)}
-              className="bg-indigo-600 text-white"
+              className="bg-orange-600 hover:bg-orange-700 text-white font-medium"
             >
               <Sparkles className="w-3.5 h-3.5 mr-1.5" />
               Generate Image
@@ -412,147 +406,139 @@ export default function MediaPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredAssets.map((asset) => {
-            const isSvg = asset.publicUrl.startsWith("data:image/svg");
-            return (
-              <Card
-                key={asset.id}
-                className="bg-studio-900/50 border-studio-800/80 overflow-hidden group hover:border-studio-700 transition-all flex flex-col"
+          {filteredAssets.map((asset) => (
+            <Card
+              key={asset.id}
+              className="bg-white border-slate-200 overflow-hidden group hover:border-slate-300 hover:shadow-sm transition-all flex flex-col"
+            >
+              {/* Image Preview Container */}
+              <div
+                className="relative aspect-video bg-slate-100 overflow-hidden cursor-pointer flex items-center justify-center border-b border-slate-100"
+                onClick={() => setPreviewAsset(asset)}
               >
-                {/* Image Preview Container */}
-                <div
-                  className="relative aspect-video bg-studio-950 overflow-hidden cursor-pointer flex items-center justify-center border-b border-studio-800/50"
-                  onClick={() => setPreviewAsset(asset)}
-                >
-                  <img
-                    src={asset.publicUrl}
-                    alt={asset.altText || asset.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
+                <img
+                  src={asset.publicUrl}
+                  alt={asset.altText || asset.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                />
 
-                  {/* Overlay Badges */}
-                  <div className="absolute top-2.5 left-2.5 flex items-center space-x-1.5">
-                    <Badge variant="outline" className="bg-black/70 backdrop-blur-sm text-[10px] text-studio-200 border-white/10">
-                      {asset.aspectRatio || "16:9"}
+                {/* Overlay Badges */}
+                <div className="absolute top-2.5 left-2.5 flex items-center space-x-1.5">
+                  <Badge variant="outline" className="bg-white/90 backdrop-blur-sm text-[10px] text-slate-800 border-slate-200">
+                    {asset.aspectRatio || "16:9"}
+                  </Badge>
+                  {asset.style && (
+                    <Badge variant="outline" className="bg-orange-50/90 backdrop-blur-sm text-[10px] text-orange-700 border-orange-200 font-medium">
+                      {asset.style.replace("_", " ")}
                     </Badge>
-                    {asset.style && (
-                      <Badge variant="outline" className="bg-indigo-950/80 backdrop-blur-sm text-[10px] text-indigo-300 border-indigo-500/20">
-                        {asset.style.replace("_", " ")}
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Action Hover Buttons */}
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="bg-studio-900/90 border-studio-700 text-white hover:bg-studio-800 h-8 px-2.5"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPreviewAsset(asset);
-                      }}
-                    >
-                      <Eye className="w-3.5 h-3.5 mr-1" />
-                      Preview
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="bg-studio-900/90 border-studio-700 text-white hover:bg-studio-800 h-8 px-2.5"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        copyToClipboard(asset.publicUrl, `url_${asset.id}`);
-                      }}
-                    >
-                      {copiedId === `url_${asset.id}` ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </Button>
-                  </div>
+                  )}
                 </div>
 
-                {/* Card Content Details */}
-                <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
-                  <div>
-                    <div className="flex items-start justify-between gap-2">
-                      <h4 className="text-sm font-semibold text-white truncate" title={asset.title}>
-                        {asset.title}
-                      </h4>
-                      <Badge
-                        variant="outline"
-                        className="text-[10px] uppercase font-mono bg-studio-800/40 text-studio-400 border-studio-700/50 shrink-0"
-                      >
-                        {asset.type.replace("_", " ")}
-                      </Badge>
-                    </div>
+                {/* Action Hover Buttons */}
+                <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="bg-white text-slate-800 hover:bg-slate-100 h-8 px-2.5 border-transparent shadow-sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPreviewAsset(asset);
+                    }}
+                  >
+                    <Eye className="w-3.5 h-3.5 mr-1 text-slate-600" />
+                    Preview
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="bg-white text-slate-800 hover:bg-slate-100 h-8 px-2.5 border-transparent shadow-sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      copyToClipboard(asset.publicUrl, `url_${asset.id}`);
+                    }}
+                  >
+                    {copiedId === `url_${asset.id}` ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5 text-slate-600" />
+                    )}
+                  </Button>
+                </div>
+              </div>
 
+              {/* Card Content Details */}
+              <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+                <div>
+                  <div className="flex items-start justify-between gap-2">
+                    <h4 className="text-sm font-semibold text-slate-900 truncate" title={asset.title}>
+                      {asset.title}
+                    </h4>
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] uppercase font-mono bg-slate-100 text-slate-600 border-slate-200 shrink-0"
+                    >
+                      {asset.type.replace("_", " ")}
+                    </Badge>
+                  </div>
+
+                  {asset.prompt && (
+                    <p className="text-xs text-slate-500 mt-1 line-clamp-2" title={asset.prompt}>
+                      {asset.prompt}
+                    </p>
+                  )}
+                </div>
+
+                {/* Card Footer Actions */}
+                <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs text-slate-400">
+                  <span>{new Date(asset.createdAt).toLocaleDateString()}</span>
+                  <div className="flex items-center space-x-1">
                     {asset.prompt && (
-                      <p className="text-xs text-studio-400 mt-1 line-clamp-2" title={asset.prompt}>
-                        {asset.prompt}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Card Footer Actions */}
-                  <div className="flex items-center justify-between pt-3 border-t border-studio-800/60 text-xs text-studio-500">
-                    <span>{new Date(asset.createdAt).toLocaleDateString()}</span>
-                    <div className="flex items-center space-x-1">
-                      {asset.prompt && (
-                        <button
-                          onClick={() => copyToClipboard(asset.prompt!, `p_${asset.id}`)}
-                          className="p-1 hover:text-studio-200 transition-colors"
-                          title="Copy AI Prompt"
-                        >
-                          {copiedId === `p_${asset.id}` ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          ) : (
-                            <FileText className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      )}
                       <button
-                        onClick={() => handleDelete(asset.id)}
-                        className="p-1 hover:text-red-400 transition-colors"
-                        title="Delete Asset"
+                        onClick={() => copyToClipboard(asset.prompt!, `p_${asset.id}`)}
+                        className="p-1 hover:text-slate-700 text-slate-400 transition-colors"
+                        title="Copy AI Prompt"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        {copiedId === `p_${asset.id}` ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        ) : (
+                          <FileText className="w-3.5 h-3.5" />
+                        )}
                       </button>
-                    </div>
+                    )}
+                    <button
+                      onClick={() => handleDelete(asset.id)}
+                      className="p-1 hover:text-red-600 text-slate-400 transition-colors"
+                      title="Delete Asset"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
-              </Card>
-            );
-          })}
+              </div>
+            </Card>
+          ))}
         </div>
       )}
 
       {/* GENERATE MODAL */}
       {isGenerateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-studio-900 border border-studio-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-studio-800 pb-4">
-              <div className="flex items-center space-x-2">
-                <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">Generate Featured Visual</h3>
-                  <p className="text-xs text-studio-400">Multi-style AI visual engine for blogs and case studies</p>
-                </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white border border-slate-200 rounded-xl max-w-xl w-full p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Generate Image</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Create visuals and hero graphics for articles</p>
               </div>
               <button
                 onClick={() => setIsGenerateOpen(false)}
-                className="text-studio-400 hover:text-white p-1 rounded-lg"
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-md"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {genError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400">
+              <div className="p-3 bg-red-50 border border-red-200 rounded-md text-xs text-red-700">
                 {genError}
               </div>
             )}
@@ -560,29 +546,29 @@ export default function MediaPage() {
             <form onSubmit={handleGenerate} className="space-y-4">
               {/* Concept Topic */}
               <div>
-                <label className="block text-xs font-semibold text-studio-200 mb-1.5">
-                  Visual Concept / Topic <span className="text-indigo-400">*</span>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                  Visual Topic / Subject <span className="text-orange-600">*</span>
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Distributed Consensus in Multi-Region Kubernetes Architecture"
+                  placeholder="e.g. Distributed Cloud Architecture and Microservices"
                   value={genTopic}
                   onChange={(e) => setGenTopic(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-studio-950 border border-studio-800 rounded-lg text-sm text-white placeholder-studio-500 focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
                 />
               </div>
 
               {/* Link to Content Item */}
               {contentItems.length > 0 && (
                 <div>
-                  <label className="block text-xs font-semibold text-studio-200 mb-1.5">
-                    Link to Content Article (Optional)
+                  <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                    Associated Content Article (Optional)
                   </label>
                   <select
                     value={genContentId}
                     onChange={(e) => setGenContentId(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-studio-950 border border-studio-800 rounded-lg text-xs text-studio-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-900 focus:outline-none focus:border-orange-500"
                   >
                     <option value="">None (Standalone Asset)</option>
                     {contentItems.map((item) => (
@@ -596,23 +582,23 @@ export default function MediaPage() {
 
               {/* Style Presets */}
               <div>
-                <label className="block text-xs font-semibold text-studio-200 mb-2">
-                  Visual Style Preset
+                <label className="block text-xs font-medium text-slate-700 mb-2">
+                  Visual Style
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {STYLE_OPTIONS.map((style) => (
                     <button
                       key={style.id}
                       type="button"
                       onClick={() => setGenStyle(style.id)}
-                      className={`p-3 rounded-lg text-left border transition-all ${
+                      className={`p-2.5 rounded-lg text-left border transition-all ${
                         genStyle === style.id
-                          ? "bg-indigo-950/40 border-indigo-500 text-white shadow-sm shadow-indigo-500/10"
-                          : "bg-studio-950/60 border-studio-800/80 text-studio-400 hover:border-studio-700 hover:text-studio-200"
+                          ? "bg-orange-50 border-orange-500 text-orange-950 ring-1 ring-orange-500"
+                          : "bg-white border-slate-200 text-slate-700 hover:border-slate-300"
                       }`}
                     >
-                      <p className="text-xs font-bold text-studio-100">{style.label}</p>
-                      <p className="text-[11px] text-studio-400 mt-1 line-clamp-2">{style.desc}</p>
+                      <p className="text-xs font-semibold">{style.label}</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{style.desc}</p>
                     </button>
                   ))}
                 </div>
@@ -620,7 +606,7 @@ export default function MediaPage() {
 
               {/* Aspect Ratio */}
               <div>
-                <label className="block text-xs font-semibold text-studio-200 mb-2">
+                <label className="block text-xs font-medium text-slate-700 mb-2">
                   Aspect Ratio
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -629,10 +615,10 @@ export default function MediaPage() {
                       key={ratio.id}
                       type="button"
                       onClick={() => setGenRatio(ratio.id)}
-                      className={`p-2.5 rounded-lg text-center border text-xs font-medium transition-all ${
+                      className={`p-2 rounded-md text-center border text-xs font-medium transition-all ${
                         genRatio === ratio.id
-                          ? "bg-indigo-600 border-indigo-500 text-white"
-                          : "bg-studio-950 border-studio-800 text-studio-400 hover:border-studio-700 hover:text-white"
+                          ? "bg-orange-600 border-orange-600 text-white"
+                          : "bg-white border-slate-200 text-slate-700 hover:border-slate-300"
                       }`}
                     >
                       {ratio.label}
@@ -643,39 +629,38 @@ export default function MediaPage() {
 
               {/* Custom Prompt Modifier */}
               <div>
-                <label className="block text-xs font-semibold text-studio-200 mb-1.5">
-                  Custom Prompt Directions (Optional)
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                  Custom Prompt Notes (Optional)
                 </label>
                 <textarea
                   rows={2}
-                  placeholder="e.g. Emphasize deep purple volumetric lighting and clean glass reflections..."
+                  placeholder="e.g. Minimal vector shapes, clean white background..."
                   value={genCustomPrompt}
                   onChange={(e) => setGenCustomPrompt(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-studio-950 border border-studio-800 rounded-lg text-xs text-white placeholder-studio-500 focus:outline-none focus:border-indigo-500 resize-none"
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 resize-none"
                 />
               </div>
 
-              <div className="flex items-center justify-end space-x-3 pt-3 border-t border-studio-800">
+              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => setIsGenerateOpen(false)}
-                  className="border-studio-700 text-studio-300"
+                  className="border-slate-200 text-slate-700"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
-                  variant="primary"
                   size="sm"
                   disabled={isGenerating || !genTopic.trim()}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white"
+                  className="bg-orange-600 hover:bg-orange-700 text-white font-medium"
                 >
                   {isGenerating ? (
                     <>
                       <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                      Synthesizing Visual...
+                      Generating...
                     </>
                   ) : (
                     <>
@@ -692,28 +677,23 @@ export default function MediaPage() {
 
       {/* UPLOAD MODAL */}
       {isUploadOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-studio-900 border border-studio-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-studio-800 pb-4">
-              <div className="flex items-center space-x-2">
-                <div className="p-2 bg-studio-800 rounded-lg text-studio-200">
-                  <Upload className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">Upload Media Asset</h3>
-                  <p className="text-xs text-studio-400">Securely ingest images, diagrams, or charts into workspace</p>
-                </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white border border-slate-200 rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Upload Media Asset</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Add images, diagrams, or graphics to your library</p>
               </div>
               <button
                 onClick={() => setIsUploadOpen(false)}
-                className="text-studio-400 hover:text-white p-1 rounded-lg"
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-md"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {uploadError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400">
+              <div className="p-3 bg-red-50 border border-red-200 rounded-md text-xs text-red-700">
                 {uploadError}
               </div>
             )}
@@ -721,10 +701,10 @@ export default function MediaPage() {
             <form onSubmit={handleUpload} className="space-y-4">
               {/* File Dropzone */}
               <div>
-                <label className="block text-xs font-semibold text-studio-200 mb-1.5">
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">
                   Select File (PNG, JPEG, WebP, SVG, GIF up to 5MB)
                 </label>
-                <div className="border-2 border-dashed border-studio-800 hover:border-indigo-500/50 rounded-xl p-6 text-center bg-studio-950/40 transition-colors">
+                <div className="border-2 border-dashed border-slate-300 hover:border-orange-500 rounded-lg p-5 text-center bg-slate-50 transition-colors">
                   <input
                     type="file"
                     required
@@ -736,10 +716,10 @@ export default function MediaPage() {
                         if (!uploadTitle) setUploadTitle(file.name.replace(/\.[^/.]+$/, ""));
                       }
                     }}
-                    className="w-full text-xs text-studio-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer"
+                    className="w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-orange-600 file:text-white hover:file:bg-orange-700 cursor-pointer"
                   />
                   {uploadFile && (
-                    <p className="text-xs text-emerald-400 mt-2">
+                    <p className="text-xs text-emerald-600 mt-2 font-medium">
                       Selected: {uploadFile.name} ({(uploadFile.size / 1024).toFixed(1)} KB)
                     </p>
                   )}
@@ -748,41 +728,41 @@ export default function MediaPage() {
 
               {/* Title */}
               <div>
-                <label className="block text-xs font-semibold text-studio-200 mb-1.5">
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">
                   Asset Title
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Architecture Topology Diagram"
+                  placeholder="e.g. Architecture Diagram"
                   value={uploadTitle}
                   onChange={(e) => setUploadTitle(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-studio-950 border border-studio-800 rounded-lg text-sm text-white placeholder-studio-500 focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
                 />
               </div>
 
               {/* Alt Text */}
               <div>
-                <label className="block text-xs font-semibold text-studio-200 mb-1.5">
-                  Accessibility Alt Text
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                  Alt Text
                 </label>
                 <input
                   type="text"
-                  placeholder="Describe image for SEO and screen readers"
+                  placeholder="Describe image for SEO and accessibility"
                   value={uploadAltText}
                   onChange={(e) => setUploadAltText(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-studio-950 border border-studio-800 rounded-lg text-sm text-white placeholder-studio-500 focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
                 />
               </div>
 
               {/* Asset Type */}
               <div>
-                <label className="block text-xs font-semibold text-studio-200 mb-1.5">
-                  Asset Classification
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                  Asset Type
                 </label>
                 <select
                   value={uploadType}
                   onChange={(e) => setUploadType(e.target.value as MediaType)}
-                  className="w-full px-3.5 py-2.5 bg-studio-950 border border-studio-800 rounded-lg text-xs text-studio-200 focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-md text-sm text-slate-900 focus:outline-none focus:border-orange-500"
                 >
                   <option value="featured_image">Featured Image</option>
                   <option value="inline_diagram">Inline Diagram</option>
@@ -791,22 +771,21 @@ export default function MediaPage() {
                 </select>
               </div>
 
-              <div className="flex items-center justify-end space-x-3 pt-3 border-t border-studio-800">
+              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => setIsUploadOpen(false)}
-                  className="border-studio-700 text-studio-300"
+                  className="border-slate-200 text-slate-700"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
-                  variant="primary"
                   size="sm"
                   disabled={isUploading || !uploadFile}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white"
+                  className="bg-orange-600 hover:bg-orange-700 text-white font-medium"
                 >
                   {isUploading ? (
                     <>
@@ -816,7 +795,7 @@ export default function MediaPage() {
                   ) : (
                     <>
                       <Upload className="w-3.5 h-3.5 mr-1.5" />
-                      Upload to Library
+                      Upload Asset
                     </>
                   )}
                 </Button>
@@ -828,25 +807,25 @@ export default function MediaPage() {
 
       {/* PREVIEW MODAL */}
       {previewAsset && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="bg-studio-900 border border-studio-800 rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150 max-h-[95vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-studio-800 pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white border border-slate-200 rounded-xl max-w-3xl w-full p-6 shadow-xl space-y-4 max-h-[95vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-base font-bold text-white">{previewAsset.title}</h3>
-                <p className="text-xs text-studio-400">
+                <h3 className="text-base font-semibold text-slate-900">{previewAsset.title}</h3>
+                <p className="text-xs text-slate-500">
                   {previewAsset.type.replace("_", " ")} • {previewAsset.aspectRatio || "16:9"} • {previewAsset.style?.replace("_", " ") || "Custom"}
                 </p>
               </div>
               <button
                 onClick={() => setPreviewAsset(null)}
-                className="text-studio-400 hover:text-white p-1 rounded-lg"
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-md"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Main Image Frame */}
-            <div className="w-full bg-studio-950 rounded-xl overflow-hidden border border-studio-800 flex items-center justify-center">
+            <div className="w-full bg-slate-100 rounded-lg overflow-hidden border border-slate-200 flex items-center justify-center">
               <img
                 src={previewAsset.publicUrl}
                 alt={previewAsset.altText || previewAsset.title}
@@ -857,45 +836,45 @@ export default function MediaPage() {
             {/* Metadata & Prompts */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               {previewAsset.prompt && (
-                <div className="p-3 bg-studio-950/60 rounded-xl border border-studio-800/80">
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-semibold text-studio-200">AI Diffusion Prompt</span>
+                    <span className="font-semibold text-slate-700">AI Prompt</span>
                     <button
                       onClick={() => copyToClipboard(previewAsset.prompt!, "prev_prompt")}
-                      className="text-indigo-400 hover:text-indigo-300 flex items-center"
+                      className="text-orange-600 hover:text-orange-700 flex items-center"
                     >
                       {copiedId === "prev_prompt" ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
                       ) : (
                         <Copy className="w-3.5 h-3.5" />
                       )}
                     </button>
                   </div>
-                  <p className="text-studio-400 leading-relaxed font-mono text-[11px]">
+                  <p className="text-slate-600 leading-relaxed font-mono text-[11px]">
                     {previewAsset.prompt}
                   </p>
                 </div>
               )}
 
-              <div className="p-3 bg-studio-950/60 rounded-xl border border-studio-800/80 space-y-2">
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
                 <div>
-                  <span className="font-semibold text-studio-200 block">Accessibility Alt Text:</span>
-                  <span className="text-studio-400">{previewAsset.altText || "None"}</span>
+                  <span className="font-semibold text-slate-700 block">Alt Text:</span>
+                  <span className="text-slate-600">{previewAsset.altText || "None"}</span>
                 </div>
                 <div>
-                  <span className="font-semibold text-studio-200 block">Storage Key:</span>
-                  <span className="text-studio-500 font-mono text-[10px] break-all">{previewAsset.storageKey}</span>
+                  <span className="font-semibold text-slate-700 block">Storage Key:</span>
+                  <span className="text-slate-500 font-mono text-[10px] break-all">{previewAsset.storageKey}</span>
                 </div>
               </div>
             </div>
 
             {/* Footer Buttons */}
-            <div className="flex items-center justify-between pt-3 border-t border-studio-800">
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => handleDelete(previewAsset.id)}
-                className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                className="border-red-200 text-red-600 hover:bg-red-50"
               >
                 <Trash2 className="w-3.5 h-3.5 mr-1.5" />
                 Delete Asset
@@ -906,17 +885,17 @@ export default function MediaPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => copyToClipboard(previewAsset.publicUrl, "prev_url")}
-                  className="border-studio-700 text-studio-300"
+                  className="border-slate-200 text-slate-700"
                 >
                   {copiedId === "prev_url" ? (
                     <>
-                      <Check className="w-3.5 h-3.5 mr-1.5 text-emerald-400" />
+                      <Check className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
                       Copied URL
                     </>
                   ) : (
                     <>
                       <Copy className="w-3.5 h-3.5 mr-1.5" />
-                      Copy Public URL
+                      Copy URL
                     </>
                   )}
                 </Button>
@@ -924,7 +903,7 @@ export default function MediaPage() {
                 <a
                   href={previewAsset.publicUrl}
                   download={`${previewAsset.title.replace(/[^a-zA-Z0-9]/g, "_")}.png`}
-                  className="inline-flex items-center justify-center text-xs font-semibold px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
+                  className="inline-flex items-center justify-center text-xs font-medium px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md transition-colors"
                 >
                   <Download className="w-3.5 h-3.5 mr-1.5" />
                   Download

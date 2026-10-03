@@ -56,6 +56,9 @@ export function middleware(req: NextRequest) {
 
   if (!isPublic && !sessionToken && !pathname.startsWith("/api")) {
     const signInUrl = new URL("/auth/signin", req.url);
+    if (pathname !== "/" && pathname !== "/auth/signin" && pathname !== "/auth/signup") {
+      signInUrl.searchParams.set("from", pathname);
+    }
     const response = NextResponse.redirect(signInUrl);
     applySecurityHeaders(response);
     return response;

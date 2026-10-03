@@ -45,22 +45,22 @@ export function WorkspaceSwitcher() {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-2.5 rounded-lg bg-studio-900/80 border border-studio-800/80 hover:border-studio-700 text-left transition-all"
+        className="w-full flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200 hover:border-slate-300 hover:bg-slate-100/80 text-left transition-all"
       >
         <div className="flex items-center gap-2.5 truncate">
-          <div className="h-6 w-6 rounded bg-brand-950 border border-brand-800/80 flex items-center justify-center text-brand-400 shrink-0">
+          <div className="h-6 w-6 rounded bg-orange-50 border border-orange-200/80 flex items-center justify-center text-orange-600 shrink-0">
             <Building2 className="h-3.5 w-3.5" />
           </div>
           <div className="truncate">
-            <div className="text-[11px] font-medium text-studio-400 uppercase tracking-wider">
+            <div className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">
               Workspace
             </div>
-            <div className="text-xs font-semibold text-white truncate">
+            <div className="text-xs font-semibold text-slate-900 truncate">
               {activeWorkspace?.name || "Select Workspace"}
             </div>
           </div>
         </div>
-        <ChevronDown className="h-3.5 w-3.5 text-studio-400 shrink-0 ml-2" />
+        <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0 ml-1" />
       </button>
 
       {isOpen && (
@@ -72,9 +72,9 @@ export function WorkspaceSwitcher() {
               setIsCreating(false);
             }}
           />
-          <div className="absolute bottom-full left-0 mb-2 w-full bg-studio-900 border border-studio-800 rounded-xl shadow-xl z-40 p-2 space-y-1">
-            <div className="px-2 py-1 text-[11px] font-medium text-studio-400 uppercase tracking-wider">
-              Available Workspaces
+          <div className="absolute bottom-full left-0 mb-2 w-full bg-white border border-slate-200 rounded-lg shadow-lg z-40 p-1.5 space-y-1">
+            <div className="px-2 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+              Workspaces
             </div>
 
             <div className="max-h-48 overflow-y-auto space-y-0.5">
@@ -87,61 +87,61 @@ export function WorkspaceSwitcher() {
                       setActiveWorkspace(ws);
                       setIsOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs transition-colors ${
+                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs transition-colors ${
                       isSelected
-                        ? "bg-brand-600/20 text-brand-300 font-medium"
-                        : "text-studio-300 hover:bg-studio-800 hover:text-white"
+                        ? "bg-orange-50 text-orange-700 font-semibold"
+                        : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
                     }`}
                   >
                     <span className="truncate">{ws.name}</span>
-                    {isSelected && <Check className="h-3.5 w-3.5 text-brand-400 shrink-0" />}
+                    {isSelected && <Check className="h-3.5 w-3.5 text-orange-600 shrink-0" />}
                   </button>
                 );
               })}
             </div>
 
-            <div className="border-t border-studio-800 pt-1.5 mt-1.5">
+            <div className="border-t border-slate-100 pt-1.5 mt-1">
               {!isCreating ? (
                 <button
                   type="button"
                   onClick={() => setIsCreating(true)}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-studio-300 hover:text-white hover:bg-studio-800 rounded-lg transition-colors"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-slate-600 hover:text-orange-600 hover:bg-orange-50 rounded-md transition-colors"
                 >
-                  <Plus className="h-3.5 w-3.5 text-brand-400" />
-                  <span>Create Workspace</span>
+                  <Plus className="h-3.5 w-3.5 text-orange-600" />
+                  <span>New Workspace</span>
                 </button>
               ) : (
-                <form onSubmit={handleCreate} className="p-2 space-y-2">
+                <form onSubmit={handleCreate} className="p-1.5 space-y-2">
                   <input
                     type="text"
                     placeholder="Workspace name"
                     value={newWsName}
                     onChange={(e) => setNewWsName(e.target.value)}
                     required
-                    className="w-full bg-studio-950 border border-studio-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-studio-500 focus:outline-none focus:border-brand-500"
+                    className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500"
                   />
                   <input
                     type="text"
                     placeholder="Description (optional)"
                     value={newWsDesc}
                     onChange={(e) => setNewWsDesc(e.target.value)}
-                    className="w-full bg-studio-950 border border-studio-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-studio-500 focus:outline-none focus:border-brand-500"
+                    className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500"
                   />
                   <div className="flex items-center gap-1.5">
                     <Button
                       type="submit"
                       variant="primary"
                       size="sm"
-                      className="w-full py-1 text-xs"
+                      className="w-full py-1 text-xs h-7"
                       disabled={isSubmitting}
                     >
-                      {isSubmitting ? "Creating..." : "Save"}
+                      {isSubmitting ? "Saving..." : "Create"}
                     </Button>
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="py-1 text-xs"
+                      className="py-1 text-xs h-7"
                       onClick={() => setIsCreating(false)}
                     >
                       Cancel

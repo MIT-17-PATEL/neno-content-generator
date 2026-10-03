@@ -6,14 +6,9 @@ import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/ca
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Sliders,
-  FileCode,
   Sparkles,
-  Layers,
   CheckCircle,
   ArrowRight,
-  Shield,
-  Search,
   Copy,
 } from "lucide-react";
 
@@ -104,29 +99,31 @@ export default function TemplatesPage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-studio-800/80 pb-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-white tracking-tight">
-              Prompt Templates & Agent Schemas
+            <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">
+              Content Templates
             </h1>
-            <Badge variant="brand">Studio V2.0</Badge>
+            <Badge variant="outline" className="text-[11px] font-normal text-slate-600 bg-slate-100">
+              Blueprints
+            </Badge>
           </div>
-          <p className="text-sm text-studio-400 mt-1">
-            Curated prompt blueprints, multi-stage agent topologies, and verified output schemas.
+          <p className="text-sm text-slate-500 mt-0.5">
+            Curated frameworks and structural blueprints for high-quality technical and executive content.
           </p>
         </div>
 
         {/* Category Filters */}
-        <div className="flex items-center gap-1.5 bg-studio-900/80 p-1 rounded-lg border border-studio-800 text-xs">
+        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
           {["all", "technical", "case-study", "blog", "executive"].map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
               className={`px-3 py-1.5 rounded-md font-medium capitalize transition-colors ${
                 selectedCategory === cat
-                  ? "bg-brand-600 text-white shadow-sm"
-                  : "text-studio-400 hover:text-white"
+                  ? "bg-white text-slate-900 shadow-sm border border-slate-200/50"
+                  : "text-slate-500 hover:text-slate-900"
               }`}
             >
               {cat === "all" ? "All Templates" : cat.replace("-", " ")}
@@ -138,43 +135,43 @@ export default function TemplatesPage() {
       {/* Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {filtered.map((tpl) => (
-          <Card key={tpl.id} className="flex flex-col justify-between hover:border-brand-500/40 transition-all duration-200">
+          <Card key={tpl.id} className="bg-white border-slate-200 flex flex-col justify-between hover:border-slate-300 hover:shadow-sm transition-all duration-200">
             <div>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between gap-2 mb-2">
-                  <Badge variant="outline" className="text-[10px] uppercase font-mono">
+                  <Badge variant="outline" className="text-[10px] uppercase font-mono text-slate-600 bg-slate-50 border-slate-200">
                     {tpl.category}
                   </Badge>
-                  <span className="text-[11px] text-brand-400 font-medium flex items-center gap-1">
+                  <span className="text-[11px] text-orange-600 font-medium flex items-center gap-1">
                     <Sparkles className="h-3 w-3" />
                     {tpl.targetEngine}
                   </span>
                 </div>
-                <CardTitle className="text-base font-semibold text-white">
+                <CardTitle className="text-base font-semibold text-slate-900">
                   {tpl.name}
                 </CardTitle>
-                <CardDescription className="text-xs text-studio-400 line-clamp-2 mt-1">
+                <CardDescription className="text-xs text-slate-500 line-clamp-2 mt-1 leading-relaxed">
                   {tpl.description}
                 </CardDescription>
               </CardHeader>
 
               <div className="px-6 space-y-3">
-                <div className="bg-studio-950/60 p-2.5 rounded-lg border border-studio-800/80">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-studio-500 block mb-1">
+                <div className="bg-slate-50 p-2.5 rounded-md border border-slate-100">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block mb-0.5">
                     Tone & Voice
                   </span>
-                  <p className="text-xs text-studio-300 font-medium">{tpl.tone}</p>
+                  <p className="text-xs text-slate-700 font-medium">{tpl.tone}</p>
                 </div>
 
                 <div>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-studio-500 block mb-1.5">
-                    Structural Workflow
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block mb-1.5">
+                    Structural Flow
                   </span>
                   <div className="flex flex-wrap gap-1">
                     {tpl.structureSteps.map((step, idx) => (
                       <span
                         key={step}
-                        className="text-[10px] bg-studio-900 border border-studio-800 text-studio-300 px-2 py-0.5 rounded"
+                        className="text-[10px] bg-slate-100 border border-slate-200 text-slate-600 px-2 py-0.5 rounded font-normal"
                       >
                         {idx + 1}. {step}
                       </span>
@@ -184,28 +181,28 @@ export default function TemplatesPage() {
               </div>
             </div>
 
-            <div className="p-6 pt-4 border-t border-studio-800/80 mt-5 flex items-center justify-between gap-2">
+            <div className="p-6 pt-4 border-t border-slate-100 mt-5 flex items-center justify-between gap-2">
               <button
                 type="button"
                 onClick={() => handleCopy(tpl.id, tpl.systemInstruction)}
-                className="text-xs text-studio-400 hover:text-white flex items-center gap-1.5 px-2.5 py-1.5 rounded hover:bg-studio-900 transition-colors"
+                className="text-xs text-slate-500 hover:text-slate-900 flex items-center gap-1.5 px-2 py-1.5 rounded transition-colors"
                 title="Copy System Prompt"
               >
                 {copiedId === tpl.id ? (
                   <>
-                    <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />
-                    <span className="text-emerald-400">Copied</span>
+                    <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                    <span className="text-emerald-600 font-medium">Copied</span>
                   </>
                 ) : (
                   <>
-                    <Copy className="h-3.5 w-3.5" />
+                    <Copy className="h-3.5 w-3.5 text-slate-400" />
                     <span>Copy Prompt</span>
                   </>
                 )}
               </button>
 
               <Link href={tpl.createLink}>
-                <Button variant="primary" size="sm" className="gap-1.5 text-xs">
+                <Button size="sm" className="gap-1.5 text-xs bg-orange-600 hover:bg-orange-700 text-white font-medium">
                   <span>Use Template</span>
                   <ArrowRight className="h-3 w-3" />
                 </Button>
