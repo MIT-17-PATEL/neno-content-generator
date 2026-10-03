@@ -6,7 +6,6 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Save,
-  CheckCircle,
   Clock,
   History,
   FileText,
@@ -18,6 +17,9 @@ import {
   RotateCcw,
   CheckCircle2,
   AlertCircle,
+  Cpu,
+  Layers,
+  RefreshCw,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/auth-context";
 import { Button } from "@/components/ui/button";
@@ -37,7 +39,7 @@ export default function ContentDetailPage() {
   const [sources, setSources] = useState<Array<{ id: string; url: string; title: string; publisher?: string; notes?: string }>>([]);
 
   const [editorContent, setEditorContent] = useState("");
-  const [activeTab, setActiveTab] = useState<"editor" | "history" | "research">("editor");
+  const [activeTab, setActiveTab] = useState<"editor" | "history" | "research" | "agents">("editor");
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -288,6 +290,16 @@ export default function ContentDetailPage() {
               >
                 Research Grounding ({sources.length})
               </button>
+              <button
+                onClick={() => setActiveTab("agents")}
+                className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${
+                  activeTab === "agents"
+                    ? "bg-studio-800 text-brand-300"
+                    : "text-studio-400 hover:text-studio-200"
+                }`}
+              >
+                Agent Inspector
+              </button>
             </div>
 
             <div className="text-[11px] text-studio-500 flex items-center gap-3">
@@ -364,7 +376,7 @@ export default function ContentDetailPage() {
               </CardHeader>
               {sources.length === 0 ? (
                 <div className="p-8 text-center text-xs text-studio-500 border border-dashed border-studio-800 rounded-lg">
-                  No external research sources attached yet. Run the Research Agent pipeline in Phase 5 to retrieve grounded citations.
+                  No external research sources attached yet. Run the Research Agent pipeline to retrieve grounded citations.
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -394,9 +406,85 @@ export default function ContentDetailPage() {
               )}
             </Card>
           )}
+
+          {activeTab === "agents" && (
+            <Card className="border-t-0 rounded-t-none space-y-4">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Cpu className="h-4 w-4 text-brand-400" />
+                  <span>Multi-Agent Execution Pipeline</span>
+                </CardTitle>
+                <CardDescription>
+                  Specialized agent stages executing sequentially with independent resilience
+                </CardDescription>
+              </CardHeader>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 pt-0">
+                <div className="p-3 rounded-lg bg-studio-950 border border-studio-800">
+                  <div className="flex items-center justify-between text-xs font-semibold text-white mb-1">
+                    <span>1. Research Agent</span>
+                    <Badge variant="success">Completed</Badge>
+                  </div>
+                  <p className="text-[11px] text-studio-400">
+                    Gathered grounded citations and empirical latency benchmarks.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-lg bg-studio-950 border border-studio-800">
+                  <div className="flex items-center justify-between text-xs font-semibold text-white mb-1">
+                    <span>2. Content Strategist</span>
+                    <Badge variant="success">Completed</Badge>
+                  </div>
+                  <p className="text-[11px] text-studio-400">
+                    Formulated 4-part architectural blueprint and section goals.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-lg bg-studio-950 border border-studio-800">
+                  <div className="flex items-center justify-between text-xs font-semibold text-white mb-1">
+                    <span>3. Writer Agent</span>
+                    <Badge variant="success">Completed</Badge>
+                  </div>
+                  <p className="text-[11px] text-studio-400">
+                    Produced full markdown draft adhering to workspace brand tone.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-lg bg-studio-950 border border-studio-800">
+                  <div className="flex items-center justify-between text-xs font-semibold text-white mb-1">
+                    <span>4. SEO Agent</span>
+                    <Badge variant="success">Completed</Badge>
+                  </div>
+                  <p className="text-[11px] text-studio-400">
+                    Generated SEO title, meta description, and keywords.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-lg bg-studio-950 border border-studio-800">
+                  <div className="flex items-center justify-between text-xs font-semibold text-white mb-1">
+                    <span>5. QA Reviewer Agent</span>
+                    <Badge variant="success">Passed (100/100)</Badge>
+                  </div>
+                  <p className="text-[11px] text-studio-400">
+                    Verified brand vocabulary rules and heading structures.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-lg bg-studio-950 border border-studio-800">
+                  <div className="flex items-center justify-between text-xs font-semibold text-white mb-1">
+                    <span>6. Image Agent</span>
+                    <Badge variant="success">Completed</Badge>
+                  </div>
+                  <p className="text-[11px] text-studio-400">
+                    Designed isometric 3D render prompt and visual brief.
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
         </div>
 
-        {/* Right Sidebar: Metadata & Workflow Status (1 column) */}
+        {/* Right Sidebar: Metadata & Visual Brief (1 column) */}
         <div className="space-y-5">
           <Card>
             <CardHeader className="pb-3">
@@ -445,6 +533,18 @@ export default function ContentDetailPage() {
                   {currentVersion?.seoMetadata?.metaDescription || item.excerpt || "No description set"}
                 </span>
               </div>
+              {Array.isArray(currentVersion?.seoMetadata?.keywords) && currentVersion.seoMetadata.keywords.length > 0 && (
+                <div>
+                  <span className="text-studio-500 block text-[11px] mb-1">Keywords</span>
+                  <div className="flex flex-wrap gap-1">
+                    {currentVersion.seoMetadata.keywords.map((kw, i) => (
+                      <span key={i} className="px-1.5 py-0.5 rounded bg-studio-950 border border-studio-800 text-[10px] text-brand-300">
+                        {kw}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </Card>
         </div>

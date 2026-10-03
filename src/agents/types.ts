@@ -5,6 +5,7 @@ export interface AgentContext {
     industry: string;
     audience: string;
     tone: string;
+    styleGuidelines?: string;
     prohibitedTerms: string[];
     preferredTerms: string[];
   };
