@@ -6,6 +6,28 @@ const memorySources = new Map<string, DbResearchSource[]>();
 const memoryRuns = new Map<string, DbGenerationRun>();
 
 export class ResearchService {
+  static async listByWorkspace(workspaceId: string): Promise<Array<DbResearchSource & { contentTitle?: string }>> {
+    if (db.isConfigured) {
+      const res = await db.query<DbResearchSource & { contentTitle?: string }>(
+        `SELECT rs.*, ci.title as "contentTitle"
+         FROM research_sources rs
+         JOIN content_items ci ON rs.content_id = ci.id
+         WHERE ci.workspace_id = $1
+         ORDER BY rs.retrieved_at DESC`,
+        [workspaceId]
+      );
+      return res.rows;
+    }
+
+    const allSources: Array<DbResearchSource & { contentTitle?: string }> = [];
+    for (const [contentId, list] of memorySources.entries()) {
+      for (const s of list) {
+        allSources.push({ ...s, contentTitle: `Article (${contentId.slice(0, 8)})` });
+      }
+    }
+    return allSources;
+  }
+
   static async listByContent(contentId: string): Promise<DbResearchSource[]> {
     if (db.isConfigured) {
       const res = await db.query<DbResearchSource>(
@@ -33,7 +55,7 @@ export class ResearchService {
       title: data.title,
       publisher: data.publisher,
       notes: data.notes,
-      relevance: data.relevance,
+      relevance: data.relevance || "Primary Empirical Reference",
       retrieved_at: new Date(),
     };
 
@@ -59,6 +81,22 @@ export class ResearchService {
     currentList.push(newSource);
     memorySources.set(data.contentId, currentList);
     return newSource;
+  }
+
+  static async deleteSource(sourceId: string): Promise<boolean> {
+    if (db.isConfigured) {
+      const res = await db.query("DELETE FROM research_sources WHERE id = $1", [sourceId]);
+      return (res.rowCount ?? 0) > 0;
+    }
+
+    for (const [contentId, list] of memorySources.entries()) {
+      const updated = list.filter((s) => s.id !== sourceId);
+      if (updated.length !== list.length) {
+        memorySources.set(contentId, updated);
+        return true;
+      }
+    }
+    return false;
   }
 }
 
