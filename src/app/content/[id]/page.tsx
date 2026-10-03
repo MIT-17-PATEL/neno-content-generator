@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -28,12 +29,13 @@ import {
   CheckCheck,
   Wrench,
   HelpCircle,
+  Image as ImageIcon,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ContentItem, ContentStatus, ContentVersion } from "@/types";
+import { ContentItem, ContentStatus, ContentVersion, MediaAsset } from "@/types";
 import { SeoAnalysisResult } from "@/lib/analysis/seo-analyzer";
 import { QaAnalysisResult } from "@/lib/analysis/qa-analyzer";
 
@@ -47,6 +49,7 @@ export default function ContentDetailPage() {
   const [currentVersion, setCurrentVersion] = useState<ContentVersion | null>(null);
   const [versions, setVersions] = useState<ContentVersion[]>([]);
   const [sources, setSources] = useState<Array<{ id: string; url: string; title: string; publisher?: string; notes?: string }>>([]);
+  const [mediaAssets, setMediaAssets] = useState<MediaAsset[]>([]);
 
   const [editorContent, setEditorContent] = useState("");
   const [activeTab, setActiveTab] = useState<"editor" | "seo" | "qa" | "history" | "research" | "agents">("editor");
@@ -91,6 +94,17 @@ export default function ContentDetailPage() {
           setEditorContent(data.currentVersion.content);
           setSelectedDiffVersion(data.versions?.[1] || null);
           setLastSavedTime(new Date(data.currentVersion.createdAt || Date.now()).toLocaleTimeString());
+        }
+
+        // Also fetch media assets for this content item
+        try {
+          const mediaRes = await fetch(`/api/media?workspaceId=${activeWorkspace.id}&contentId=${contentId}`);
+          if (mediaRes.ok) {
+            const mediaData = await mediaRes.json();
+            setMediaAssets(mediaData.assets || []);
+          }
+        } catch {
+          // Non-blocking
         }
       }
     } catch (err) {
@@ -970,6 +984,53 @@ export default function ContentDetailPage() {
                       </span>
                     ))}
                   </div>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Featured Visual Asset Card */}
+          <Card>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm">Featured Visual</CardTitle>
+              <Link href="/media" className="text-[11px] text-indigo-400 hover:text-indigo-300">
+                Media Library
+              </Link>
+            </CardHeader>
+            <div className="space-y-3 text-xs">
+              {mediaAssets.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="rounded-lg overflow-hidden border border-studio-800 bg-studio-950 aspect-video relative group">
+                    <img
+                      src={mediaAssets[0].publicUrl}
+                      alt={mediaAssets[0].altText || mediaAssets[0].title}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute top-1.5 left-1.5">
+                      <Badge variant="outline" className="bg-black/70 text-[9px] text-studio-200 border-white/10">
+                        {mediaAssets[0].style?.replace("_", " ") || "16:9"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <p className="text-[11px] font-medium text-studio-200 truncate">
+                    {mediaAssets[0].title}
+                  </p>
+                  {mediaAssets[0].prompt && (
+                    <p className="text-[10px] text-studio-400 line-clamp-2 font-mono bg-studio-950 p-1.5 rounded border border-studio-800/60">
+                      {mediaAssets[0].prompt}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center p-4 border border-dashed border-studio-800 rounded-lg bg-studio-950/40">
+                  <ImageIcon className="w-5 h-5 text-studio-500 mx-auto mb-1.5" />
+                  <p className="text-[11px] text-studio-400">No image generated yet</p>
+                  <Link href="/media">
+                    <Button variant="outline" size="sm" className="mt-2 text-[11px] h-7 px-2.5 border-studio-700">
+                      <Sparkles className="w-3 h-3 mr-1 text-indigo-400" />
+                      Create Visual
+                    </Button>
+                  </Link>
                 </div>
               )}
             </div>
