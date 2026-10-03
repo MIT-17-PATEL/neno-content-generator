@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -24,13 +24,18 @@ import {
   Check,
   Edit3,
   Bot,
-  SplitSquareVertical,
+  Gauge,
+  CheckCheck,
+  Wrench,
+  HelpCircle,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ContentItem, ContentStatus, ContentVersion } from "@/types";
+import { SeoAnalysisResult } from "@/lib/analysis/seo-analyzer";
+import { QaAnalysisResult } from "@/lib/analysis/qa-analyzer";
 
 export default function ContentDetailPage() {
   const params = useParams();
@@ -44,13 +49,18 @@ export default function ContentDetailPage() {
   const [sources, setSources] = useState<Array<{ id: string; url: string; title: string; publisher?: string; notes?: string }>>([]);
 
   const [editorContent, setEditorContent] = useState("");
-  const [activeTab, setActiveTab] = useState<"editor" | "history" | "research" | "agents">("editor");
+  const [activeTab, setActiveTab] = useState<"editor" | "seo" | "qa" | "history" | "research" | "agents">("editor");
 
   // Autosave & Edit State
   const [isDirty, setIsDirty] = useState(false);
   const [isAutosaving, setIsAutosaving] = useState(false);
   const [lastSavedTime, setLastSavedTime] = useState<string>("");
   const [hasUserEdits, setHasUserEdits] = useState(false);
+
+  // Analysis State
+  const [seoAnalysis, setSeoAnalysis] = useState<SeoAnalysisResult | null>(null);
+  const [qaAnalysis, setQaAnalysis] = useState<QaAnalysisResult | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Section AI Revision State
   const [isReviseModalOpen, setIsReviseModalOpen] = useState(false);
@@ -93,6 +103,40 @@ export default function ContentDetailPage() {
   useEffect(() => {
     fetchContentDetails();
   }, [fetchContentDetails]);
+
+  // Run Real-time SEO and QA Analysis
+  const runAnalysis = useCallback(async () => {
+    if (!activeWorkspace || !editorContent.trim()) return;
+    setIsAnalyzing(true);
+    try {
+      const res = await fetch(`/api/content/${contentId}/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: activeWorkspace.id,
+          content: editorContent,
+          seoTitle: currentVersion?.seoMetadata?.seoTitle || item?.title,
+          metaDescription: currentVersion?.seoMetadata?.metaDescription || item?.excerpt,
+          slug: item?.slug,
+          keywords: currentVersion?.seoMetadata?.keywords || [],
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setSeoAnalysis(data.seo);
+        setQaAnalysis(data.qa);
+      }
+    } catch (err) {
+      console.error("Analysis execution error:", err);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [activeWorkspace, editorContent, contentId, currentVersion, item]);
+
+  useEffect(() => {
+    runAnalysis();
+  }, [runAnalysis]);
 
   // Debounced Autosave Effect
   useEffect(() => {
@@ -185,6 +229,33 @@ export default function ContentDetailPage() {
       console.error("Manual save error:", err);
     } finally {
       setIsAutosaving(false);
+    }
+  };
+
+  const handleAutoFixQaIssue = async (issueTitle: string, suggestion: string) => {
+    if (!activeWorkspace) return;
+    try {
+      const res = await fetch(`/api/content/${contentId}/fix-qa`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: activeWorkspace.id,
+          content: editorContent,
+          issueTitle,
+          suggestion,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setEditorContent(data.fixedContent);
+        setCurrentVersion(data.version);
+        setVersions([data.version, ...versions]);
+        setStatusMessage(`Auto-resolved issue: "${issueTitle}"`);
+        setTimeout(() => setStatusMessage(""), 3500);
+      }
+    } catch (err) {
+      console.error("Auto fix error:", err);
     }
   };
 
@@ -394,11 +465,11 @@ export default function ContentDetailPage() {
         </div>
       )}
 
-      {/* Main Two-Panel Layout */}
+      {/* Main Multi-Tab Navigation */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Center: Editor & Version Tabs (3 columns) */}
+        {/* Center: Editor & Analytical Panels (3 columns) */}
         <div className="lg:col-span-3 space-y-4">
-          <div className="flex items-center justify-between bg-studio-900/60 border border-studio-800 px-4 py-2 rounded-t-xl">
+          <div className="flex items-center justify-between bg-studio-900/60 border border-studio-800 px-4 py-2 rounded-t-xl overflow-x-auto">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setActiveTab("editor")}
@@ -409,6 +480,32 @@ export default function ContentDetailPage() {
                 }`}
               >
                 Draft Editor
+              </button>
+              <button
+                onClick={() => setActiveTab("seo")}
+                className={`px-3 py-1 text-xs rounded-md font-medium transition-colors flex items-center gap-1.5 ${
+                  activeTab === "seo"
+                    ? "bg-studio-800 text-brand-300"
+                    : "text-studio-400 hover:text-studio-200"
+                }`}
+              >
+                <span>SEO & Readability</span>
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              </button>
+              <button
+                onClick={() => setActiveTab("qa")}
+                className={`px-3 py-1 text-xs rounded-md font-medium transition-colors flex items-center gap-1.5 ${
+                  activeTab === "qa"
+                    ? "bg-studio-800 text-brand-300"
+                    : "text-studio-400 hover:text-studio-200"
+                }`}
+              >
+                <span>QA Audit</span>
+                <span className={`px-1.5 py-0.2 rounded text-[10px] ${
+                  (qaAnalysis?.score || 100) >= 80 ? "bg-emerald-950 text-emerald-300" : "bg-amber-950 text-amber-300"
+                }`}>
+                  {qaAnalysis?.score || 100}%
+                </span>
               </button>
               <button
                 onClick={() => setActiveTab("history")}
@@ -449,6 +546,7 @@ export default function ContentDetailPage() {
             </div>
           </div>
 
+          {/* Tab 1: Draft Editor */}
           {activeTab === "editor" && (
             <div className="border border-t-0 border-studio-800 rounded-b-xl bg-studio-950 p-4">
               <textarea
@@ -461,6 +559,166 @@ export default function ContentDetailPage() {
             </div>
           )}
 
+          {/* Tab 2: SEO & Readability Panel */}
+          {activeTab === "seo" && seoAnalysis && (
+            <Card className="border-t-0 rounded-t-none space-y-6">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Gauge className="h-4 w-4 text-brand-400" />
+                  <span>Real-Time Search Engine Optimization & Readability</span>
+                </CardTitle>
+                <CardDescription>
+                  Comprehensive structural analysis, SERP snippet validation, and reading complexity
+                </CardDescription>
+              </CardHeader>
+
+              {/* Top Metrics Row */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 pt-0">
+                <div className="p-3.5 rounded-lg bg-studio-950 border border-studio-800">
+                  <span className="text-[11px] text-studio-400 block">Readability Score</span>
+                  <div className="text-xl font-bold text-white mt-1">
+                    {seoAnalysis.readabilityScore} / 100
+                  </div>
+                  <span className="text-[10px] text-emerald-400 mt-0.5 block">
+                    {seoAnalysis.readabilityLevel}
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-lg bg-studio-950 border border-studio-800">
+                  <span className="text-[11px] text-studio-400 block">Est. Reading Time</span>
+                  <div className="text-xl font-bold text-white mt-1">
+                    ~{seoAnalysis.readingTimeMinutes} min
+                  </div>
+                  <span className="text-[10px] text-studio-500 mt-0.5 block">
+                    Based on {seoAnalysis.wordCount} words
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-lg bg-studio-950 border border-studio-800">
+                  <span className="text-[11px] text-studio-400 block">SEO Title Length</span>
+                  <div className="text-xl font-bold text-white mt-1">
+                    {seoAnalysis.titleLength} chars
+                  </div>
+                  <span className={`text-[10px] mt-0.5 block ${
+                    seoAnalysis.titleStatus === "good" ? "text-emerald-400" : "text-amber-400"
+                  }`}>
+                    {seoAnalysis.titleStatus === "good" ? "Optimal (<65c)" : "Check length"}
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-lg bg-studio-950 border border-studio-800">
+                  <span className="text-[11px] text-studio-400 block">Heading Structure</span>
+                  <div className="text-xl font-bold text-white mt-1">
+                    {seoAnalysis.headingCounts.h1} H1 • {seoAnalysis.headingCounts.h2} H2
+                  </div>
+                  <span className="text-[10px] text-studio-500 mt-0.5 block">
+                    {seoAnalysis.headingCounts.h3} Sub-sections (H3)
+                  </span>
+                </div>
+              </div>
+
+              {/* Keywords Density Table */}
+              <div className="p-4 pt-0 space-y-3">
+                <span className="text-xs font-semibold text-white block">
+                  Target Keyword Density & Distribution
+                </span>
+                {seoAnalysis.keywordsAnalysis.length === 0 ? (
+                  <p className="text-xs text-studio-500 italic">No target keywords specified for this draft.</p>
+                ) : (
+                  <div className="border border-studio-800 rounded-lg overflow-hidden">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-studio-950 text-studio-400 border-b border-studio-800">
+                        <tr>
+                          <th className="p-2.5">Keyword</th>
+                          <th className="p-2.5">Occurrences</th>
+                          <th className="p-2.5">Density</th>
+                          <th className="p-2.5">In Heading?</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-studio-800/60">
+                        {seoAnalysis.keywordsAnalysis.map((kw, idx) => (
+                          <tr key={idx} className="hover:bg-studio-950/40">
+                            <td className="p-2.5 font-medium text-white">{kw.keyword}</td>
+                            <td className="p-2.5 text-studio-300">{kw.count}x</td>
+                            <td className="p-2.5 text-studio-300">{kw.densityPercent}%</td>
+                            <td className="p-2.5">
+                              {kw.foundInHeading ? (
+                                <Badge variant="success">Yes</Badge>
+                              ) : (
+                                <Badge variant="outline">No</Badge>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+
+          {/* Tab 3: QA Quality Audit Panel */}
+          {activeTab === "qa" && qaAnalysis && (
+            <Card className="border-t-0 rounded-t-none space-y-4">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                    <CardTitle className="text-base">Automated QA & Brand Rule Audit</CardTitle>
+                  </div>
+                  <Badge variant={qaAnalysis.passed ? "success" : "warning"}>
+                    Score: {qaAnalysis.score}/100
+                  </Badge>
+                </div>
+                <CardDescription>
+                  Deep inspection for prohibited brand vocabulary, unsupported claims, and structural issues
+                </CardDescription>
+              </CardHeader>
+
+              <div className="p-4 pt-0 space-y-3">
+                {qaAnalysis.issues.length === 0 ? (
+                  <div className="p-8 text-center text-xs text-emerald-400 border border-dashed border-emerald-800/60 rounded-lg bg-emerald-950/20">
+                    <CheckCheck className="h-8 w-8 mx-auto mb-2 text-emerald-400" />
+                    <p className="font-semibold text-sm text-white">All QA & Brand Quality Checks Passed</p>
+                    <p className="text-xs text-emerald-300 mt-1">Zero prohibited buzzwords or structural defects detected.</p>
+                  </div>
+                ) : (
+                  qaAnalysis.issues.map((issue) => (
+                    <div
+                      key={issue.id}
+                      className="p-3.5 rounded-lg border border-studio-800 bg-studio-950/80 flex flex-col md:flex-row md:items-center justify-between gap-3"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-white">{issue.title}</span>
+                          <Badge variant={issue.severity === "high" ? "warning" : "outline"}>
+                            {issue.severity.toUpperCase()}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-studio-400">{issue.description}</p>
+                        <p className="text-[11px] text-brand-300">
+                          <strong>Fix:</strong> {issue.suggestion}
+                        </p>
+                      </div>
+
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleAutoFixQaIssue(issue.title, issue.suggestion)}
+                        className="text-xs gap-1.5 shrink-0"
+                      >
+                        <Wrench className="h-3.5 w-3.5 text-brand-400" />
+                        <span>Auto-Fix</span>
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </Card>
+          )}
+
+          {/* Tab 4: Version History */}
           {activeTab === "history" && (
             <Card className="border-t-0 rounded-t-none space-y-4">
               <CardHeader>
@@ -533,6 +791,7 @@ export default function ContentDetailPage() {
             </Card>
           )}
 
+          {/* Tab 5: Research */}
           {activeTab === "research" && (
             <Card className="border-t-0 rounded-t-none">
               <CardHeader>
@@ -574,6 +833,7 @@ export default function ContentDetailPage() {
             </Card>
           )}
 
+          {/* Tab 6: Multi-Agent Inspector */}
           {activeTab === "agents" && (
             <Card className="border-t-0 rounded-t-none space-y-4">
               <CardHeader>
@@ -630,7 +890,7 @@ export default function ContentDetailPage() {
                 <div className="p-3 rounded-lg bg-studio-950 border border-studio-800">
                   <div className="flex items-center justify-between text-xs font-semibold text-white mb-1">
                     <span>5. QA Reviewer Agent</span>
-                    <Badge variant="success">Passed (100/100)</Badge>
+                    <Badge variant="success">Passed ({qaAnalysis?.score || 100}/100)</Badge>
                   </div>
                   <p className="text-[11px] text-studio-400">
                     Verified brand vocabulary rules and heading structures.
