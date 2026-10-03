@@ -1,8 +1,8 @@
 # AI Content Studio — Development Progress Log
 
 ## Current Status
-- **Current Phase**: Phase 11 (Export System) — Completed
-- **Next Phase**: Phase 12 (Security & Rate Limiting Hardening)
+- **Current Phase**: Phase 12 (Security & Rate Limiting Hardening) — Completed
+- **Next Phase**: Phase 13 (Failure Handling & Retries Hardening)
 
 ---
 
@@ -148,3 +148,41 @@
 - `npm run lint` — Passed (0 warnings, 0 errors)
 - `npm run type-check` — Passed (0 errors)
 - `npm run build` — Passed (all 27 routes successfully compiled and generated)
+
+---
+
+## Phase 12 — Security & Rate Limiting Hardening
+
+### 1. Completed Work
+- **Global Security & Edge Middleware** ([src/middleware.ts](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/middleware.ts)):
+  - Enforces OWASP-recommended security headers across all app responses (`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Strict-Transport-Security: max-age=63072000`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`, `X-XSS-Protection`).
+  - Session authentication guard for protected dashboard routes (`/`, `/content`, `/create`, `/media`, `/research`, `/settings`).
+- **Sliding-Window Rate Limiting Engine** ([src/lib/security/rate-limiter.ts](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/lib/security/rate-limiter.ts)):
+  - Multi-tier request throttling with automatic IP identification and cleanup:
+    - **Authentication tier**: 15 requests / min (brute force defense)
+    - **AI Generation tier**: 10 requests / min (LLM quota and cost abuse guard)
+    - **REST API tier**: 120 requests / min (standard application traffic)
+  - Standardized `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, and `Retry-After` response headers with HTTP 429 status code handling.
+- **Security & Activity Audit Logging Service** ([src/services/audit-service.ts](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/services/audit-service.ts)):
+  - In-memory ring buffer (up to 1,000 events) and database tracking for compliance.
+  - Logs critical actions (`AUTH_LOGIN`, `AUTH_SIGNUP`, `CONTENT_CREATE`, `GENERATION_START`, `MEDIA_UPLOAD`, `EXPORT_TRIGGER`).
+  - API endpoint `GET /api/audit` ([src/app/api/audit/route.ts](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/app/api/audit/route.ts)) for querying workspace security trails.
+- **Security & Audit Logs Dashboard View** ([src/app/settings/page.tsx](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/app/settings/page.tsx)):
+  - Added dedicated **Security & Audit Logs** tab in workspace settings.
+  - Interactive display of active OWASP policies and sliding window throttle tiers.
+  - Live filterable workspace audit log table with timestamps, actions, and user attribution.
+
+### 2. Files Created / Modified
+- [src/types/index.ts](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/types/index.ts)
+- [src/lib/security/rate-limiter.ts](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/lib/security/rate-limiter.ts)
+- [src/services/audit-service.ts](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/services/audit-service.ts)
+- [src/middleware.ts](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/middleware.ts)
+- [src/app/api/audit/route.ts](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/app/api/audit/route.ts)
+- [src/app/api/auth/signin/route.ts](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/app/api/auth/signin/route.ts)
+- [src/app/settings/page.tsx](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/app/settings/page.tsx)
+- [docs/development-progress.md](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/docs/development-progress.md)
+
+### 3. Verification & Validation Gate
+- `npm run lint` — Passed (0 warnings, 0 errors)
+- `npm run type-check` — Passed (0 errors)
+- `npm run build` — Passed (all 28 routes + Middleware successfully compiled and generated)

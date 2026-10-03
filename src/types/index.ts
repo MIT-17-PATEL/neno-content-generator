@@ -120,3 +120,34 @@ export interface ExportFormattedResult {
     versionNumber: number;
   };
 }
+
+export type AuditAction =
+  | "AUTH_LOGIN"
+  | "AUTH_SIGNUP"
+  | "AUTH_SIGNOUT"
+  | "CONTENT_CREATE"
+  | "CONTENT_UPDATE"
+  | "CONTENT_DELETE"
+  | "CONTENT_STATUS_CHANGE"
+  | "GENERATION_START"
+  | "GENERATION_COMPLETE"
+  | "GENERATION_RETRY"
+  | "MEDIA_UPLOAD"
+  | "MEDIA_GENERATE"
+  | "MEDIA_DELETE"
+  | "EXPORT_TRIGGER"
+  | "SETTINGS_UPDATE";
+
+export interface AuditEvent {
+  id: string;
+  workspaceId?: string;
+  userId?: string;
+  userEmail?: string;
+  action: AuditAction;
+  resourceId?: string;
+  resourceType?: string;
+  details?: Record<string, unknown>;
+  ipAddress?: string;
+  userAgent?: string;
+  timestamp: string;
+}

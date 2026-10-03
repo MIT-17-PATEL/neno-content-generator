@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { signInSchema } from "@/validation";
 import { verifyPassword, createSessionToken } from "@/lib/auth";
 import { dataStore } from "@/server/data-store";
+import { AuditService } from "@/services/audit-service";
 
 export async function POST(req: NextRequest) {
   try {
@@ -39,6 +40,15 @@ export async function POST(req: NextRequest) {
 
     const workspaces = await dataStore.getUserWorkspaces(user.id);
     const { passwordHash: _, ...publicUser } = user;
+
+    AuditService.record({
+      userId: user.id,
+      userEmail: user.email,
+      action: "AUTH_LOGIN",
+      details: {
+        workspaceCount: workspaces.length,
+      },
+    });
 
     const response = NextResponse.json({
       user: publicUser,

@@ -12,14 +12,21 @@ import {
   X,
   AlertCircle,
   RefreshCw,
+  Shield,
+  ShieldCheck,
+  Lock,
+  Activity,
+  Key,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/auth-context";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { AuditEvent } from "@/types";
 
 export default function SettingsPage() {
   const { activeWorkspace } = useAuth();
+  const [activeTab, setActiveTab] = useState<"brand" | "security">("brand");
 
   const [brandName, setBrandName] = useState("");
   const [industry, setIndustry] = useState("");
@@ -31,6 +38,9 @@ export default function SettingsPage() {
 
   const [newPreferred, setNewPreferred] = useState("");
   const [newProhibited, setNewProhibited] = useState("");
+
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [isLoadingAudit, setIsLoadingAudit] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -133,6 +143,28 @@ export default function SettingsPage() {
     }
   };
 
+  const fetchAuditLogs = useCallback(async () => {
+    if (!activeWorkspace) return;
+    setIsLoadingAudit(true);
+    try {
+      const res = await fetch(`/api/audit?workspaceId=${activeWorkspace.id}&limit=50`);
+      if (res.ok) {
+        const data = await res.json();
+        setAuditEvents(data.events || []);
+      }
+    } catch (err) {
+      console.error("Fetch audit error:", err);
+    } finally {
+      setIsLoadingAudit(false);
+    }
+  }, [activeWorkspace]);
+
+  useEffect(() => {
+    if (activeTab === "security") {
+      fetchAuditLogs();
+    }
+  }, [activeTab, fetchAuditLogs]);
+
   if (!activeWorkspace) {
     return (
       <div className="max-w-4xl mx-auto p-12 text-center text-studio-400">
@@ -142,52 +174,94 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
+    <div className="space-y-6 max-w-5xl mx-auto pb-12">
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-studio-800/60 pb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <h1 className="text-2xl font-bold text-white tracking-tight">
-              Brand Voice & Workspace Settings
+              Workspace & Security Settings
             </h1>
             <Badge variant="info">{activeWorkspace.name}</Badge>
           </div>
           <p className="text-sm text-studio-400">
-            Define the brand parameters, audience profiles, and vocabulary injected into AI generation agents
+            Manage brand voice rules, OWASP security policies, rate limits, and audit logs
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={fetchBrandSettings}
-            disabled={isLoading}
-            className="gap-1.5 text-studio-400"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
-            <span>Refresh</span>
-          </Button>
-          <Button
-            variant="primary"
-            size="md"
-            onClick={handleSave}
-            disabled={isSaving || isLoading}
-            className="gap-2"
-          >
-            {saveSuccess ? (
-              <>
-                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                <span>Saved Successfully</span>
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4" />
-                <span>{isSaving ? "Saving Guidelines..." : "Save Brand Settings"}</span>
-              </>
-            )}
-          </Button>
+          {activeTab === "brand" ? (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={fetchBrandSettings}
+                disabled={isLoading}
+                className="gap-1.5 text-studio-400"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+                <span>Refresh</span>
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                onClick={handleSave}
+                disabled={isSaving || isLoading}
+                className="gap-2"
+              >
+                {saveSuccess ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                    <span>Saved Successfully</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    <span>{isSaving ? "Saving Guidelines..." : "Save Brand Settings"}</span>
+                  </>
+                )}
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchAuditLogs}
+              disabled={isLoadingAudit}
+              className="gap-1.5 text-studio-300 border-studio-700"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isLoadingAudit ? "animate-spin" : ""}`} />
+              <span>Refresh Audit Log</span>
+            </Button>
+          )}
         </div>
+      </div>
+
+      {/* Settings Navigation Tabs */}
+      <div className="flex items-center space-x-2 border-b border-studio-800/80 pb-3">
+        <button
+          onClick={() => setActiveTab("brand")}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+            activeTab === "brand"
+              ? "bg-indigo-600 text-white shadow-sm shadow-indigo-500/20"
+              : "bg-studio-950/60 border border-studio-800 text-studio-400 hover:text-studio-200"
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>Brand Voice & Identity</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("security")}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+            activeTab === "security"
+              ? "bg-indigo-600 text-white shadow-sm shadow-indigo-500/20"
+              : "bg-studio-950/60 border border-studio-800 text-studio-400 hover:text-studio-200"
+          }`}
+        >
+          <Shield className="w-3.5 h-3.5" />
+          <span>Security & Audit Logs</span>
+        </button>
       </div>
 
       {errorMessage && (
@@ -204,8 +278,9 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Main Settings Form */}
-      <form onSubmit={handleSave} className="space-y-6">
+      {/* Tab 1: Brand Voice */}
+      {activeTab === "brand" && (
+        <form onSubmit={handleSave} className="space-y-6">
         {/* Core Identity */}
         <Card>
           <CardHeader>
@@ -422,6 +497,157 @@ export default function SettingsPage() {
           </div>
         </Card>
       </form>
+      )}
+
+      {/* Tab 2: Security & Audit Logs */}
+      {activeTab === "security" && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Security Policies Matrix */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <Card className="bg-studio-900/50 border-studio-800">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-400">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-sm">OWASP Application Hardening</CardTitle>
+                    <CardDescription className="text-xs">
+                      Active security headers and transport layer defense
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <div className="space-y-2.5 p-4 pt-0 text-xs">
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-studio-950 border border-studio-800">
+                  <span className="text-studio-300 font-medium">HSTS Preload Protection</span>
+                  <Badge variant="success">max-age=63072000</Badge>
+                </div>
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-studio-950 border border-studio-800">
+                  <span className="text-studio-300 font-medium">Anti-Clickjacking Defense</span>
+                  <Badge variant="success">X-Frame-Options: DENY</Badge>
+                </div>
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-studio-950 border border-studio-800">
+                  <span className="text-studio-300 font-medium">MIME-Sniffing Prevention</span>
+                  <Badge variant="success">nosniff</Badge>
+                </div>
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-studio-950 border border-studio-800">
+                  <span className="text-studio-300 font-medium">Prompt Injection Boundary</span>
+                  <Badge variant="success">Active Isolation</Badge>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="bg-studio-900/50 border-studio-800">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-sm">Rate Limiting & Tenant Protection</CardTitle>
+                    <CardDescription className="text-xs">
+                      Sliding window request throttling and quota controls
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <div className="space-y-2.5 p-4 pt-0 text-xs">
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-studio-950 border border-studio-800">
+                  <span className="text-studio-300 font-medium">AI Generation Throttle</span>
+                  <span className="font-mono text-indigo-400 font-semibold">10 req / min</span>
+                </div>
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-studio-950 border border-studio-800">
+                  <span className="text-studio-300 font-medium">Authentication Brute-Force Guard</span>
+                  <span className="font-mono text-emerald-400 font-semibold">15 req / min</span>
+                </div>
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-studio-950 border border-studio-800">
+                  <span className="text-studio-300 font-medium">REST API Standard Tier</span>
+                  <span className="font-mono text-brand-400 font-semibold">120 req / min</span>
+                </div>
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-studio-950 border border-studio-800">
+                  <span className="text-studio-300 font-medium">Session Token Security</span>
+                  <Badge variant="info">JWT HTTP-Only SameSite</Badge>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Audit Logs Table */}
+          <Card className="bg-studio-900/50 border-studio-800 overflow-hidden">
+            <CardHeader className="border-b border-studio-800/80 pb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <Activity className="w-5 h-5 text-indigo-400" />
+                  <div>
+                    <CardTitle className="text-sm">Workspace Audit Trail</CardTitle>
+                    <CardDescription className="text-xs">
+                      Immutable record of security events, authentication, and content operations
+                    </CardDescription>
+                  </div>
+                </div>
+                <Badge variant="outline">{auditEvents.length} Events Logged</Badge>
+              </div>
+            </CardHeader>
+
+            {isLoadingAudit ? (
+              <div className="py-16 text-center text-xs text-studio-400">
+                <RefreshCw className="w-6 h-6 animate-spin text-indigo-400 mx-auto mb-2" />
+                Loading audit trail records...
+              </div>
+            ) : auditEvents.length === 0 ? (
+              <div className="py-16 text-center text-xs text-studio-400">
+                <Shield className="w-8 h-8 text-studio-600 mx-auto mb-2" />
+                <p className="font-semibold text-studio-300">No audit events recorded yet</p>
+                <p className="text-studio-500 mt-0.5">
+                  Security, auth, and generation actions will appear here in real time.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-studio-950/80 border-b border-studio-800 text-studio-400 font-medium">
+                    <tr>
+                      <th className="py-3 px-4">Action</th>
+                      <th className="py-3 px-4">User</th>
+                      <th className="py-3 px-4">Timestamp</th>
+                      <th className="py-3 px-4">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-studio-800/60">
+                    {auditEvents.map((evt) => (
+                      <tr key={evt.id} className="hover:bg-studio-800/30 transition-colors">
+                        <td className="py-3 px-4 font-mono font-semibold">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] ${
+                              evt.action.startsWith("AUTH")
+                                ? "bg-emerald-950 text-emerald-300 border border-emerald-800/50"
+                                : evt.action.startsWith("GENERATION")
+                                ? "bg-indigo-950 text-indigo-300 border border-indigo-800/50"
+                                : "bg-studio-800 text-studio-300 border border-studio-700"
+                            }`}
+                          >
+                            {evt.action}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-studio-300">
+                          {evt.userEmail || evt.userId || "System"}
+                        </td>
+                        <td className="py-3 px-4 text-studio-400 text-[11px]">
+                          {new Date(evt.timestamp).toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4 text-studio-400 font-mono text-[11px] max-w-xs truncate">
+                          {evt.details ? JSON.stringify(evt.details) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
