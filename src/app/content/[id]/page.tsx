@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -20,6 +20,11 @@ import {
   Cpu,
   Layers,
   RefreshCw,
+  Wand2,
+  Check,
+  Edit3,
+  Bot,
+  SplitSquareVertical,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/auth-context";
 import { Button } from "@/components/ui/button";
@@ -41,9 +46,24 @@ export default function ContentDetailPage() {
   const [editorContent, setEditorContent] = useState("");
   const [activeTab, setActiveTab] = useState<"editor" | "history" | "research" | "agents">("editor");
 
+  // Autosave & Edit State
+  const [isDirty, setIsDirty] = useState(false);
+  const [isAutosaving, setIsAutosaving] = useState(false);
+  const [lastSavedTime, setLastSavedTime] = useState<string>("");
+  const [hasUserEdits, setHasUserEdits] = useState(false);
+
+  // Section AI Revision State
+  const [isReviseModalOpen, setIsReviseModalOpen] = useState(false);
+  const [reviseSectionTitle, setReviseSectionTitle] = useState("");
+  const [reviseSelectedText, setReviseSelectedText] = useState("");
+  const [reviseInstruction, setReviseInstruction] = useState("");
+  const [isRevising, setIsRevising] = useState(false);
+  const [reviseError, setReviseError] = useState("");
+
+  // History Diff Comparison State
+  const [selectedDiffVersion, setSelectedDiffVersion] = useState<ContentVersion | null>(null);
+
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
 
   const fetchContentDetails = useCallback(async () => {
@@ -59,6 +79,8 @@ export default function ContentDetailPage() {
         setSources(data.sources || []);
         if (data.currentVersion) {
           setEditorContent(data.currentVersion.content);
+          setSelectedDiffVersion(data.versions?.[1] || null);
+          setLastSavedTime(new Date(data.currentVersion.createdAt || Date.now()).toLocaleTimeString());
         }
       }
     } catch (err) {
@@ -71,6 +93,47 @@ export default function ContentDetailPage() {
   useEffect(() => {
     fetchContentDetails();
   }, [fetchContentDetails]);
+
+  // Debounced Autosave Effect
+  useEffect(() => {
+    if (!isDirty || !activeWorkspace || !editorContent.trim()) return;
+
+    const timer = setTimeout(async () => {
+      setIsAutosaving(true);
+      try {
+        const res = await fetch(`/api/content/${contentId}/versions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId: activeWorkspace.id,
+            content: editorContent,
+            seoMetadata: currentVersion?.seoMetadata || {},
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setCurrentVersion(data.version);
+          setVersions((prev) => [data.version, ...prev]);
+          setIsDirty(false);
+          setHasUserEdits(true);
+          setLastSavedTime(new Date().toLocaleTimeString());
+        }
+      } catch (err) {
+        console.error("Autosave error:", err);
+      } finally {
+        setIsAutosaving(false);
+      }
+    }, 2500);
+
+    return () => clearTimeout(timer);
+  }, [editorContent, isDirty, activeWorkspace, contentId, currentVersion]);
+
+  const handleEditorChange = (val: string) => {
+    setEditorContent(val);
+    setIsDirty(true);
+    setHasUserEdits(true);
+  };
 
   const handleStatusChange = async (newStatus: ContentStatus) => {
     if (!activeWorkspace || !item) return;
@@ -86,7 +149,7 @@ export default function ContentDetailPage() {
       if (res.ok) {
         const data = await res.json();
         setItem(data.item);
-        setStatusMessage(`Status updated to ${newStatus.toUpperCase()}`);
+        setStatusMessage(`Workflow state updated to ${newStatus.toUpperCase()}`);
         setTimeout(() => setStatusMessage(""), 3000);
       }
     } catch (err) {
@@ -94,10 +157,9 @@ export default function ContentDetailPage() {
     }
   };
 
-  const handleSaveNewVersion = async () => {
+  const handleManualSave = async () => {
     if (!activeWorkspace || !item || !editorContent.trim()) return;
-    setIsSaving(true);
-    setSaveSuccess(false);
+    setIsAutosaving(true);
 
     try {
       const res = await fetch(`/api/content/${contentId}/versions`, {
@@ -114,13 +176,57 @@ export default function ContentDetailPage() {
         const data = await res.json();
         setCurrentVersion(data.version);
         setVersions([data.version, ...versions]);
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
+        setIsDirty(false);
+        setLastSavedTime(new Date().toLocaleTimeString());
+        setStatusMessage(`Version ${data.version.versionNumber} saved successfully`);
+        setTimeout(() => setStatusMessage(""), 3000);
       }
     } catch (err) {
-      console.error("Save version error:", err);
+      console.error("Manual save error:", err);
     } finally {
-      setIsSaving(false);
+      setIsAutosaving(false);
+    }
+  };
+
+  const handleExecuteSectionRevision = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeWorkspace || !reviseInstruction.trim() || !reviseSelectedText.trim()) return;
+
+    setIsRevising(true);
+    setReviseError("");
+
+    try {
+      const res = await fetch(`/api/content/${contentId}/revise`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: activeWorkspace.id,
+          sectionTitle: reviseSectionTitle || "Selected Section",
+          currentText: reviseSelectedText,
+          instruction: reviseInstruction,
+          fullContent: editorContent,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setEditorContent(data.version.content);
+        setCurrentVersion(data.version);
+        setVersions([data.version, ...versions]);
+        setIsReviseModalOpen(false);
+        setReviseInstruction("");
+        setReviseSelectedText("");
+        setIsDirty(false);
+        setStatusMessage("Section rewritten and saved as a new version!");
+        setTimeout(() => setStatusMessage(""), 3500);
+      } else {
+        const errData = await res.json();
+        setReviseError(errData.error || "Revision failed");
+      }
+    } catch {
+      setReviseError("Network error during section revision");
+    } finally {
+      setIsRevising(false);
     }
   };
 
@@ -169,6 +275,16 @@ export default function ContentDetailPage() {
               </span>
               <span className="text-studio-600">•</span>
               <span className="text-xs text-studio-400">{item.category}</span>
+              {hasUserEdits ? (
+                <Badge variant="info" className="gap-1 text-[10px]">
+                  <span>User Modified</span>
+                </Badge>
+              ) : (
+                <Badge variant="default" className="gap-1 text-[10px]">
+                  <Bot className="h-3 w-3" />
+                  <span>AI Generated Draft</span>
+                </Badge>
+              )}
             </div>
             <h1 className="text-xl font-bold text-white tracking-tight mt-0.5">
               {item.title}
@@ -176,8 +292,41 @@ export default function ContentDetailPage() {
           </div>
         </div>
 
-        {/* Workflow Action Bar */}
-        <div className="flex items-center gap-2">
+        {/* Workflow & Autosave Status Bar */}
+        <div className="flex items-center gap-2.5">
+          <div className="text-[11px] text-studio-400 px-2 py-1 rounded bg-studio-900 border border-studio-800 flex items-center gap-1.5">
+            {isAutosaving ? (
+              <>
+                <RefreshCw className="h-3 w-3 animate-spin text-brand-400" />
+                <span>Autosaving...</span>
+              </>
+            ) : isDirty ? (
+              <>
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                <span>Unsaved changes</span>
+              </>
+            ) : (
+              <>
+                <Check className="h-3 w-3 text-emerald-400" />
+                <span>Saved {lastSavedTime ? `at ${lastSavedTime}` : ""}</span>
+              </>
+            )}
+          </div>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setReviseSectionTitle("Section 1");
+              setReviseSelectedText(editorContent.slice(0, 400));
+              setIsReviseModalOpen(true);
+            }}
+            className="gap-1.5 text-xs text-brand-300 border-brand-800/60 hover:bg-brand-950/40"
+          >
+            <Wand2 className="h-3.5 w-3.5 text-brand-400" />
+            <span>AI Section Rewrite</span>
+          </Button>
+
           {item.status === "draft" && (
             <Button
               variant="secondary"
@@ -228,21 +377,12 @@ export default function ContentDetailPage() {
           <Button
             variant="primary"
             size="sm"
-            onClick={handleSaveNewVersion}
-            disabled={isSaving}
+            onClick={handleManualSave}
+            disabled={isAutosaving}
             className="gap-1.5 text-xs"
           >
-            {saveSuccess ? (
-              <>
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
-                <span>Saved v{currentVersion?.versionNumber}</span>
-              </>
-            ) : (
-              <>
-                <Save className="h-3.5 w-3.5" />
-                <span>{isSaving ? "Saving..." : "Save Version"}</span>
-              </>
-            )}
+            <Save className="h-3.5 w-3.5" />
+            <span>Save Snapshot</span>
           </Button>
         </div>
       </div>
@@ -256,7 +396,7 @@ export default function ContentDetailPage() {
 
       {/* Main Two-Panel Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Center: Editor View (3 columns) */}
+        {/* Center: Editor & Version Tabs (3 columns) */}
         <div className="lg:col-span-3 space-y-4">
           <div className="flex items-center justify-between bg-studio-900/60 border border-studio-800 px-4 py-2 rounded-t-xl">
             <div className="flex items-center gap-2">
@@ -312,9 +452,9 @@ export default function ContentDetailPage() {
           {activeTab === "editor" && (
             <div className="border border-t-0 border-studio-800 rounded-b-xl bg-studio-950 p-4">
               <textarea
-                rows={22}
+                rows={24}
                 value={editorContent}
-                onChange={(e) => setEditorContent(e.target.value)}
+                onChange={(e) => handleEditorChange(e.target.value)}
                 placeholder="Write or edit content markdown..."
                 className="w-full bg-transparent font-mono text-xs md:text-sm text-studio-100 placeholder-studio-600 focus:outline-none resize-y leading-relaxed"
               />
@@ -322,46 +462,73 @@ export default function ContentDetailPage() {
           )}
 
           {activeTab === "history" && (
-            <Card className="border-t-0 rounded-t-none">
+            <Card className="border-t-0 rounded-t-none space-y-4">
               <CardHeader>
-                <CardTitle className="text-base">Immutable Version History</CardTitle>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <History className="h-4 w-4 text-brand-400" />
+                  <span>Immutable Version History & Snapshot Comparison</span>
+                </CardTitle>
                 <CardDescription>
-                  Every save and AI generation stage produces a permanent snapshot
+                  Review previous revisions, inspect differences, or restore any historical snapshot
                 </CardDescription>
               </CardHeader>
-              <div className="space-y-3">
-                {versions.map((ver) => (
-                  <div
-                    key={ver.id}
-                    className="p-3.5 rounded-lg border border-studio-800 bg-studio-950/60 flex items-center justify-between"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-xs text-white">
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 pt-0">
+                {/* Version List */}
+                <div className="space-y-2 border-r border-studio-800/80 pr-3">
+                  <span className="text-[11px] font-semibold text-studio-400 uppercase tracking-wider block mb-2">
+                    Snapshots
+                  </span>
+                  {versions.map((ver) => (
+                    <div
+                      key={ver.id}
+                      onClick={() => setSelectedDiffVersion(ver)}
+                      className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                        selectedDiffVersion?.id === ver.id
+                          ? "bg-brand-950/40 border-brand-500/60"
+                          : "bg-studio-950/60 border-studio-800 hover:border-studio-700"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-white">
                           Version {ver.versionNumber}
                         </span>
                         {ver.id === currentVersion?.id && (
-                          <Badge variant="info">Current</Badge>
+                          <Badge variant="info">Active</Badge>
                         )}
                       </div>
-                      <p className="text-[11px] text-studio-500 mt-0.5">
-                        Saved on {new Date(ver.createdAt || Date.now()).toLocaleString()}
+                      <p className="text-[10px] text-studio-500 mt-1">
+                        {new Date(ver.createdAt || Date.now()).toLocaleString()}
                       </p>
                     </div>
+                  ))}
+                </div>
 
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setEditorContent(ver.content);
-                        setActiveTab("editor");
-                      }}
-                      className="text-xs"
-                    >
-                      Restore to Editor
-                    </Button>
+                {/* Diff / Snapshot Preview */}
+                <div className="md:col-span-2 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-studio-800">
+                    <span className="text-xs font-medium text-studio-300">
+                      Previewing Version {selectedDiffVersion?.versionNumber || currentVersion?.versionNumber}
+                    </span>
+                    {selectedDiffVersion && selectedDiffVersion.id !== currentVersion?.id && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => {
+                          setEditorContent(selectedDiffVersion.content);
+                          setActiveTab("editor");
+                          setIsDirty(true);
+                        }}
+                        className="text-xs"
+                      >
+                        Restore This Version to Editor
+                      </Button>
+                    )}
                   </div>
-                ))}
+                  <pre className="p-4 rounded-lg bg-studio-950 border border-studio-800/80 text-xs font-mono text-studio-300 overflow-x-auto max-h-96 whitespace-pre-wrap leading-relaxed">
+                    {selectedDiffVersion?.content || currentVersion?.content}
+                  </pre>
+                </div>
               </div>
             </Card>
           )}
@@ -549,6 +716,92 @@ export default function ContentDetailPage() {
           </Card>
         </div>
       </div>
+
+      {/* AI Section Revision Modal */}
+      {isReviseModalOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-xl p-6 bg-studio-900 border-studio-800 shadow-2xl">
+            <div className="flex items-center gap-2 mb-1">
+              <Wand2 className="h-5 w-5 text-brand-400" />
+              <h3 className="text-lg font-bold text-white">AI Section Revision Assistant</h3>
+            </div>
+            <p className="text-xs text-studio-400 mb-4">
+              Instruct the AI to rewrite or optimize a specific section without affecting the rest of the document.
+            </p>
+
+            {reviseError && (
+              <div className="mb-4 p-3 rounded-lg bg-red-950 border border-red-800 text-xs text-red-300">
+                {reviseError}
+              </div>
+            )}
+
+            <form onSubmit={handleExecuteSectionRevision} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-studio-300 mb-1.5">
+                  Section Title / Identifier
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={reviseSectionTitle}
+                  onChange={(e) => setReviseSectionTitle(e.target.value)}
+                  placeholder="e.g., Section 2: Architectural Blueprint"
+                  className="w-full bg-studio-950 border border-studio-800 rounded-lg px-3 py-2 text-xs text-white placeholder-studio-500 focus:outline-none focus:border-brand-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-studio-300 mb-1.5">
+                  Target Section Text to Rewrite
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  value={reviseSelectedText}
+                  onChange={(e) => setReviseSelectedText(e.target.value)}
+                  placeholder="Paste or select the portion of text you wish to rewrite..."
+                  className="w-full bg-studio-950 border border-studio-800 rounded-lg px-3 py-2 text-xs text-white font-mono placeholder-studio-500 focus:outline-none focus:border-brand-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-studio-300 mb-1.5">
+                  Revision Instruction / Prompt
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={reviseInstruction}
+                  onChange={(e) => setReviseInstruction(e.target.value)}
+                  placeholder="e.g., Make the tone more technical and add a benchmark comparison table"
+                  className="w-full bg-studio-950 border border-studio-800 rounded-lg px-3 py-2 text-xs text-white placeholder-studio-500 focus:outline-none focus:border-brand-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-studio-800">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsReviseModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  disabled={isRevising}
+                  className="gap-1.5"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>{isRevising ? "Rewriting Section..." : "Execute Section Revision"}</span>
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
