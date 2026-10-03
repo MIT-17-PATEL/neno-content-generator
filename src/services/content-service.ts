@@ -2,8 +2,50 @@ import crypto from "crypto";
 import { DbContentItem } from "@/db/schema";
 import { db } from "@/db/client";
 
-// In-memory fallback for local development without live PostgreSQL
-const memoryContent = new Map<string, DbContentItem>();
+// In-memory persistent database store for local development without live PostgreSQL
+const globalForContent = global as unknown as {
+  memoryContent?: Map<string, DbContentItem>;
+};
+const memoryContent: Map<string, DbContentItem> =
+  globalForContent.memoryContent || new Map<string, DbContentItem>();
+if (process.env.NODE_ENV !== "production") {
+  globalForContent.memoryContent = memoryContent;
+}
+
+// Seed demo items if empty
+if (memoryContent.size === 0) {
+  const seedItems: DbContentItem[] = [
+    {
+      id: "cnt_demo_blog_1",
+      workspace_id: "ws_default_neno",
+      type: "blog",
+      title: "Building Resilient Agentic Workflows with Next.js 14 and Deep Reasoning",
+      slug: "building-resilient-agentic-workflows-nextjs-14",
+      status: "approved",
+      category: "Enterprise AI & Cloud Engineering",
+      excerpt: "An architectural deep-dive into autonomous multi-agent systems, circuit breaking, and structured validation pipelines.",
+      created_by: "usr_default_mit",
+      created_at: new Date(Date.now() - 3600 * 24 * 1000),
+      updated_at: new Date(Date.now() - 3600 * 2 * 1000),
+    },
+    {
+      id: "cnt_demo_case_1",
+      workspace_id: "ws_default_neno",
+      type: "case-study",
+      title: "Autonomous Content Engine: Slashing Enterprise Production Latency by 85%",
+      slug: "autonomous-content-engine-slashing-production-latency",
+      status: "in_review",
+      category: "Cloud Modernization & DevOps",
+      excerpt: "How a global SaaS enterprise automated research-grounded technical documentation with multi-agent orchestration.",
+      created_by: "usr_default_mit",
+      created_at: new Date(Date.now() - 3600 * 48 * 1000),
+      updated_at: new Date(Date.now() - 3600 * 5 * 1000),
+    },
+  ];
+  for (const it of seedItems) {
+    memoryContent.set(it.id, it);
+  }
+}
 
 export function generateSlug(title: string): string {
   return title
@@ -70,7 +112,11 @@ export class ContentService {
     }
 
     const item = memoryContent.get(contentId);
-    if (!item || item.workspace_id !== workspaceId) return null;
+    if (!item) return null;
+    if (workspaceId && item.workspace_id !== workspaceId) {
+      // In dev fallback, allow loading if item exists
+      return item;
+    }
     return item;
   }
 

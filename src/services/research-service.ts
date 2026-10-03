@@ -2,8 +2,18 @@ import crypto from "crypto";
 import { DbResearchSource, DbGenerationRun } from "@/db/schema";
 import { db } from "@/db/client";
 
-const memorySources = new Map<string, DbResearchSource[]>();
-const memoryRuns = new Map<string, DbGenerationRun>();
+const globalForResearch = global as unknown as {
+  memorySources?: Map<string, DbResearchSource[]>;
+  memoryRuns?: Map<string, DbGenerationRun>;
+};
+const memorySources: Map<string, DbResearchSource[]> =
+  globalForResearch.memorySources || new Map<string, DbResearchSource[]>();
+const memoryRuns: Map<string, DbGenerationRun> =
+  globalForResearch.memoryRuns || new Map<string, DbGenerationRun>();
+if (process.env.NODE_ENV !== "production") {
+  globalForResearch.memorySources = memorySources;
+  globalForResearch.memoryRuns = memoryRuns;
+}
 
 export class ResearchService {
   static async listByWorkspace(workspaceId: string): Promise<Array<DbResearchSource & { contentTitle?: string }>> {

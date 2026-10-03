@@ -2,7 +2,79 @@ import crypto from "crypto";
 import { DbContentVersion } from "@/db/schema";
 import { db } from "@/db/client";
 
-const memoryVersions = new Map<string, DbContentVersion[]>();
+const globalForVersions = global as unknown as {
+  memoryVersions?: Map<string, DbContentVersion[]>;
+};
+const memoryVersions: Map<string, DbContentVersion[]> =
+  globalForVersions.memoryVersions || new Map<string, DbContentVersion[]>();
+if (process.env.NODE_ENV !== "production") {
+  globalForVersions.memoryVersions = memoryVersions;
+}
+
+if (memoryVersions.size === 0) {
+  memoryVersions.set("cnt_demo_blog_1", [
+    {
+      id: "ver_demo_blog_1",
+      content_id: "cnt_demo_blog_1",
+      version_number: 1,
+      content: `# Building Resilient Agentic Workflows with Next.js 14 and Deep Reasoning
+
+> **Executive Brief**: In modern engineering landscapes, mastering autonomous agent pipelines has shifted from an exploratory advantage to a foundational architectural mandate. This blueprint provides a deep, production-grade analysis.
+
+---
+
+## 1. The Paradigm Shift: Core Challenges and Motivation
+
+Engineering organizations navigating high-velocity scale continually confront a central dilemma: how to balance computational throughput against operational resiliency. Traditional approaches to AI content orchestration introduced severe bottlenecks:
+
+- **Unbounded Latency Spikes**: Cascading timeouts caused by tightly coupled downstream dependencies.
+- **State Inconsistencies**: Weakly coordinated distributed data boundaries resulting in non-deterministic failure states.
+- **Operational Overhead**: Excessive manual intervention required to re-balance workloads under uneven traffic spikes.
+
+\`\`\`
+┌──────────────────┐       ┌──────────────────────┐       ┌─────────────────┐
+│ Ingress Traffic  │ ────► │ Decoupled Processing │ ────► │ Verified State  │
+│ Telemetry Guard  │       │ Circuit Breakers     │       │ Storage Tier    │
+└──────────────────┘       └──────────────────────┘       └─────────────────┘
+\`\`\`
+
+---
+
+## 2. Architectural Blueprint & Key Primitives
+
+Designing a resilient solution requires combining proven design patterns with strict operational discipline.
+
+1. **Deterministic State Management**: Enforce immutable event logs and idempotency keys.
+2. **Autonomous Fault Isolation**: Isolate volatile worker processes behind robust circuit-breaking layers.
+3. **Observability First**: Embed structured tracing headers and distributed spans into every payload.
+
+---
+
+## 3. Benchmarks, Tradeoffs, and Failure Modes
+
+| Metric Dimension | Baseline Architecture | Modern Resilient Pipeline | Variance Impact |
+| :--- | :--- | :--- | :--- |
+| **P99 Response Latency** | 420ms | 48ms | **-88.5% Latency** |
+| **Peak Throughput (Req/s)** | 2,400 rps | 18,500 rps | **+670% Capacity** |
+| **Failure Recovery Time (MTTR)** | 14.2 minutes | < 1.8 seconds | **Autonomous Restoration** |
+| **Infrastructure Unit Cost** | $1.42 / 1k ops | $0.28 / 1k ops | **-80% Spend** |
+
+---
+
+## Summary & Next Actions
+
+Adopting these architectural patterns enables teams to operate at maximum velocity without sacrificing reliability.`,
+      seo_metadata: {
+        seoTitle: "Building Resilient Agentic Workflows with Next.js 14",
+        metaDescription: "Explore architectural patterns, latency benchmarks, and resilience strategies for autonomous multi-agent pipelines.",
+        keywords: ["agentic ai", "nextjs 14", "resilience", "microservices"],
+        slug: "building-resilient-agentic-workflows-nextjs-14",
+      },
+      created_by: "usr_default_mit",
+      created_at: new Date(),
+    },
+  ]);
+}
 
 export class VersionService {
   static async listByContent(contentId: string): Promise<DbContentVersion[]> {

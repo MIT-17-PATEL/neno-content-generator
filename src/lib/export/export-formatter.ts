@@ -72,17 +72,26 @@ export class ExportFormatter {
       return version.content;
     }
 
+    const dateObj = new Date(item.createdAt || Date.now());
+    const day = String(dateObj.getDate()).padStart(2, "0");
+    const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const year = dateObj.getFullYear();
+    const formattedPublishDate = `${day}:${month}:${year}`;
+
     const frontmatter = `---
 title: "${item.title.replace(/"/g, '\\"')}"
 slug: "${item.slug}"
-type: "${item.type}"
 category: "${item.category}"
-status: "${item.status}"
 author: "${authorName}"
+publishDate: "${formattedPublishDate}"
+readingTime: "${readingTimeMinutes} min read"
+status: "${item.status === "approved" || item.status === "exported" ? "Published" : "Draft"}"
+shortDescription: "${(item.excerpt || "").replace(/"/g, '\\"')}"
+buttonText: "Read article"
+buttonLink: "/blog-single/${item.slug}"
+type: "${item.type}"
 brand: "${brandName}"
-date: "${new Date(item.createdAt || Date.now()).toISOString().split("T")[0]}"
 wordCount: ${wordCount}
-readingTimeMinutes: ${readingTimeMinutes}
 version: ${version.versionNumber}
 seo:
   title: "${(version.seoMetadata?.seoTitle || item.title).replace(/"/g, '\\"')}"
@@ -342,17 +351,55 @@ ${keywords.map((kw) => `    - "${kw}"`).join("\n")}
     readingTimeMinutes: number,
     now: string
   ): string {
-    const { item, version, brandName = "Enterprise", authorName = "Content Team" } = options;
+    const { item, version, brandName = "Neno Technology", authorName = "Mit Patel" } = options;
+    const dateObj = new Date(item.createdAt || Date.now());
+    const day = String(dateObj.getDate()).padStart(2, "0");
+    const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const year = dateObj.getFullYear();
+    const formattedPublishDate = `${day}:${month}:${year}`;
+
+    const isCaseStudy = item.type === "case-study";
 
     const payload = {
+      // 1:1 Website Form Compatible Schema (Blog & Case Study)
+      title: item.title,
+      slug: item.slug,
+      category: item.category || (isCaseStudy ? "Enterprise AI & Cloud" : "Agentic AI"),
+      author: authorName,
+      publishDate: formattedPublishDate,
+      status: item.status === "approved" || item.status === "exported" ? "Published" : "Draft",
+
+      // Case Study specific website fields
+      ...(isCaseStudy
+        ? {
+            clientOwner: `Global ${item.category || "Enterprise"} Platform`,
+            tags: `NENO DEPLOYMENT, AGENTIC AI SYSTEMS, ${(item.category || "ENTERPRISE").toUpperCase()}`,
+            description: item.excerpt || "",
+            challengeText: "Operational latency, non-deterministic system failure modes, and heavy manual triage.",
+            solutionText: `Autonomous agent architecture engineered by ${brandName} with verified telemetry and fault isolation.`,
+            techStack: "Neno Platform, Gemini 2.5 Flash, TypeScript, PostgreSQL",
+            impactMetrics: [
+              { value: "68%", label: "Cost Reduction" },
+              { value: "4.2x", label: "Operational Velocity" },
+              { value: "99.4%", label: "Accuracy Rate" },
+            ],
+            ctaButtonText: "Discuss Similar Project",
+            ctaButtonLink: "/contact-us",
+          }
+        : {
+            // Blog specific website fields
+            readingTime: `${readingTimeMinutes} min read`,
+            featuredImage: version.seoMetadata?.featuredImageBrief || "",
+            shortDescription: item.excerpt || "",
+            blogContent: version.content,
+            buttonText: "Read article",
+            buttonLink: `/blog-single/${item.slug}`,
+          }),
+
+      // Extended metadata & Headless CMS contract
       schema_version: "2.0",
       id: item.id,
-      slug: item.slug,
-      title: item.title,
       type: item.type,
-      category: item.category,
-      excerpt: item.excerpt || "",
-      status: item.status,
       content: {
         raw_markdown: version.content,
         html_rendered: this.markdownToHtmlBody(version.content),

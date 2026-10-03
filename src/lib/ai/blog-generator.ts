@@ -61,8 +61,16 @@ Target Word Count: ~${targetWords} words.
 You must return valid JSON matching this exact structure:
 {
   "title": "Article Title",
-  "slug": "url-slug",
-  "excerpt": "Compelling 2-sentence summary",
+  "slug": "your-blog-slug",
+  "category": "${params.category}",
+  "author": "Mit Patel",
+  "publishDate": "03:10:2026",
+  "readingTime": "5 min read",
+  "status": "Draft",
+  "shortDescription": "A concise summary for the blog listing",
+  "excerpt": "A concise summary for the blog listing",
+  "buttonText": "Read article",
+  "buttonLink": "/blog-single/your-blog-slug",
   "outline": [
     { "heading": "Section 1", "description": "Goal of section", "keyPoints": ["point 1", "point 2"] }
   ],
@@ -71,7 +79,7 @@ You must return valid JSON matching this exact structure:
     "seoTitle": "Under 60 char title",
     "metaDescription": "Under 160 char description",
     "keywords": ["key1", "key2", "key3"],
-    "slug": "url-slug"
+    "slug": "your-blog-slug"
   },
   "featuredImage": {
     "brief": "Visual description",
@@ -263,16 +271,36 @@ Adopting these architectural patterns enables **${brandName}** teams to operate 
       };
     }
 
-    // 4. Validate output with Zod schema
-    const validatedOutput = blogGenerationOutputSchema.parse(rawOutput);
+    // 4. Ensure all website entry schema fields are present
+    const rawObj = (rawOutput || {}) as Record<string, unknown>;
+    const currentDate = new Date();
+    const day = String(currentDate.getDate()).padStart(2, "0");
+    const month = String(currentDate.getMonth() + 1).padStart(2, "0");
+    const year = currentDate.getFullYear();
+    const formattedDate = `${day}:${month}:${year}`;
+
+    if (!rawObj.category) rawObj.category = params.category;
+    if (!rawObj.author) rawObj.author = "Mit Patel";
+    if (!rawObj.publishDate) rawObj.publishDate = formattedDate;
+    if (!rawObj.readingTime) {
+      const wordsCount = typeof rawObj.article === "string" ? rawObj.article.split(/\s+/).length : targetWords;
+      rawObj.readingTime = `${Math.max(1, Math.ceil(wordsCount / 200))} min read`;
+    }
+    if (!rawObj.status) rawObj.status = "Draft";
+    if (!rawObj.shortDescription) rawObj.shortDescription = rawObj.excerpt || "";
+    if (!rawObj.buttonText) rawObj.buttonText = "Read article";
+    if (!rawObj.buttonLink) rawObj.buttonLink = `/blog-single/${rawObj.slug || generateSlug(params.topic)}`;
+
+    // Validate output with Zod schema
+    const validatedOutput = blogGenerationOutputSchema.parse(rawObj);
 
     // 5. Create Content Item in Database
     const contentItem = await ContentService.create({
       workspaceId: params.workspaceId,
       type: "blog",
       title: validatedOutput.title,
-      category: params.category,
-      excerpt: validatedOutput.excerpt,
+      category: validatedOutput.category || params.category,
+      excerpt: validatedOutput.shortDescription || validatedOutput.excerpt,
       createdBy: params.userId,
     });
 

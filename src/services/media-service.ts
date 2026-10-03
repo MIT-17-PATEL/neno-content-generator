@@ -3,7 +3,14 @@ import { DbMediaAsset } from "@/db/schema";
 import { db } from "@/db/client";
 import { MediaAsset, MediaType, ImageAspectRatio, ImageStylePreset } from "@/types";
 
-const memoryMedia = new Map<string, DbMediaAsset[]>();
+const globalForMedia = global as unknown as {
+  memoryMedia?: Map<string, DbMediaAsset[]>;
+};
+const memoryMedia: Map<string, DbMediaAsset[]> =
+  globalForMedia.memoryMedia || new Map<string, DbMediaAsset[]>();
+if (process.env.NODE_ENV !== "production") {
+  globalForMedia.memoryMedia = memoryMedia;
+}
 
 function mapDbToMediaAsset(dbAsset: DbMediaAsset): MediaAsset {
   const meta = (dbAsset.metadata || {}) as Record<string, unknown>;

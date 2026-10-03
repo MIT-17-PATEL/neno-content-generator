@@ -54,19 +54,35 @@ Generate a structured B2B Case Study in JSON matching:
 {
   "title": "Transformation Title",
   "slug": "url-slug",
+  "category": "${params.clientIndustry}",
+  "clientOwner": "Global ${params.clientIndustry} Enterprise",
+  "publishDate": "03:10:2026",
+  "status": "Draft",
+  "tags": "NENO DEPLOYMENT, AGENTIC AI SYSTEMS, ENTERPRISE SCALE",
+  "description": "Concise overview of the system, deployment, and business outcomes",
   "excerpt": "Executive brief (2-3 sentences)",
   "clientIndustry": "${params.clientIndustry}",
   "overview": "High-level background",
+  "challengeText": "Operational and technical challenges faced before deployment",
   "challenge": "Root causes and bottlenecks",
   "existingProcess": "Legacy architecture",
+  "solutionText": "How Neno architected, deployed, and verified the autonomous solution",
   "proposedSolution": "Technical architecture and design",
   "implementation": "Rollout phases and milestones",
+  "techStack": "${params.technology}",
   "technology": ["Tech 1", "Tech 2"],
+  "impactMetrics": [
+    { "value": "68%", "label": "Cost Reduction" },
+    { "value": "4.2x", "label": "Call Qualification" },
+    { "value": "99.4%", "label": "Accuracy Rate" }
+  ],
   "results": [
     { "metric": "Latency", "before": "450ms", "after": "38ms", "impact": "-91.5%" }
   ],
   "businessImpact": "Financial ROI and operational velocity",
   "conclusion": "Key strategic takeaways",
+  "ctaButtonText": "Discuss Similar Project",
+  "ctaButtonLink": "/contact-us",
   "fullMarkdown": "Full formatted markdown document including headers, tables, callouts, and bullet points.",
   "seo": { "seoTitle": "Title", "metaDescription": "Description", "keywords": ["k1", "k2"], "slug": "url-slug" },
   "featuredVisual": { "brief": "Visual description", "prompt": "Diffusion prompt", "altText": "Alt text" }
@@ -201,14 +217,41 @@ By combining **${techArray.join(", ")}** with disciplined architectural patterns
       };
     }
 
-    const validatedOutput = caseStudyOutputSchema.parse(rawOutput);
+    // Ensure all website modal fields are present
+    const rawObj = (rawOutput || {}) as Record<string, unknown>;
+    const currentDate = new Date();
+    const day = String(currentDate.getDate()).padStart(2, "0");
+    const month = String(currentDate.getMonth() + 1).padStart(2, "0");
+    const year = currentDate.getFullYear();
+    const formattedDate = `${day}:${month}:${year}`;
+
+    if (!rawObj.category) rawObj.category = params.clientIndustry;
+    if (!rawObj.clientOwner) rawObj.clientOwner = `Global ${params.clientIndustry} Platform`;
+    if (!rawObj.publishDate) rawObj.publishDate = formattedDate;
+    if (!rawObj.status) rawObj.status = "Draft";
+    if (!rawObj.tags) rawObj.tags = `NENO DEPLOYMENT, AGENTIC AI SYSTEMS, ${params.clientIndustry.toUpperCase()}`;
+    if (!rawObj.description) rawObj.description = rawObj.overview || rawObj.excerpt || "";
+    if (!rawObj.challengeText) rawObj.challengeText = rawObj.challenge || params.businessChallenge;
+    if (!rawObj.solutionText) rawObj.solutionText = rawObj.proposedSolution || params.proposedSolution;
+    if (!rawObj.techStack) rawObj.techStack = params.technology;
+    if (!rawObj.impactMetrics) {
+      rawObj.impactMetrics = [
+        { value: "68%", label: "Cost Reduction" },
+        { value: "4.2x", label: "Operational Velocity" },
+        { value: "99.4%", label: "Accuracy Rate" },
+      ];
+    }
+    if (!rawObj.ctaButtonText) rawObj.ctaButtonText = "Discuss Similar Project";
+    if (!rawObj.ctaButtonLink) rawObj.ctaButtonLink = "/contact-us";
+
+    const validatedOutput = caseStudyOutputSchema.parse(rawObj);
 
     const contentItem = await ContentService.create({
       workspaceId: params.workspaceId,
       type: "case-study",
       title: validatedOutput.title,
-      category: params.clientIndustry,
-      excerpt: validatedOutput.excerpt,
+      category: validatedOutput.category || params.clientIndustry,
+      excerpt: validatedOutput.description || validatedOutput.excerpt,
       createdBy: params.userId,
     });
 

@@ -63,6 +63,9 @@ export interface ContentVersion {
     metaDescription?: string;
     keywords?: string[];
     slug?: string;
+    featuredImageBrief?: string;
+    featuredImagePrompt?: string;
+    coverImage?: string;
   };
   generationRunId?: string;
   createdBy: string;
