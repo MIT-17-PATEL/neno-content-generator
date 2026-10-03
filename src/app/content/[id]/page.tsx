@@ -23,6 +23,7 @@ import {
   Sparkles,
   ExternalLink,
   Bot,
+  Loader2,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/auth-context";
 import { Button } from "@/components/ui/button";
@@ -97,6 +98,11 @@ export default function ContentDetailPage() {
 
   // History Diff State
   const [selectedDiffVersion, setSelectedDiffVersion] = useState<ContentVersion | null>(null);
+
+  // Direct Website API Publish State
+  const [isPublishingToWebsite, setIsPublishingToWebsite] = useState(false);
+  const [publishWebsiteSuccess, setPublishWebsiteSuccess] = useState<string | null>(null);
+  const [publishWebsiteError, setPublishWebsiteError] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState("");
@@ -408,6 +414,39 @@ export default function ContentDetailPage() {
     setTimeout(() => setIsCopiedExport(false), 2000);
   };
 
+  const handlePublishToWebsite = async () => {
+    if (!activeWorkspace || !contentId) return;
+    setIsPublishingToWebsite(true);
+    setPublishWebsiteSuccess(null);
+    setPublishWebsiteError(null);
+    try {
+      const res = await fetch(`/api/content/${contentId}/publish-website`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId: activeWorkspace.id }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.publishedToWebsite) {
+          setPublishWebsiteSuccess(`Published directly to Neno Website API (${data.endpointUsed})! Live link: ${data.websiteUrl}`);
+        } else {
+          setPublishWebsiteSuccess(`Payload formatted & approved! Export JSON copied or ready for http://localhost:3000.`);
+        }
+        if (item) setItem({ ...item, status: "approved" });
+      } else {
+        setPublishWebsiteError(data.error || "Failed to publish to website");
+      }
+    } catch {
+      setPublishWebsiteError("Could not reach website server at http://localhost:3000");
+    } finally {
+      setIsPublishingToWebsite(false);
+      setTimeout(() => {
+        setPublishWebsiteSuccess(null);
+        setPublishWebsiteError(null);
+      }, 7000);
+    }
+  };
+
   const wordCount = editorContent.trim().split(/\s+/).filter(Boolean).length;
   const charCount = editorContent.length;
 
@@ -546,6 +585,26 @@ export default function ContentDetailPage() {
           </Button>
 
           <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePublishToWebsite}
+            disabled={isPublishingToWebsite}
+            className="gap-1.5 text-xs h-8 font-semibold border-orange-300 text-orange-700 bg-orange-50/50 hover:bg-orange-100/80 transition-colors"
+          >
+            {isPublishingToWebsite ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-orange-600" />
+                <span>Publishing...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-3.5 w-3.5 text-orange-600" />
+                <span>Publish to Website</span>
+              </>
+            )}
+          </Button>
+
+          <Button
             variant="primary"
             size="sm"
             onClick={handleManualSave}
@@ -557,6 +616,40 @@ export default function ContentDetailPage() {
           </Button>
         </div>
       </div>
+
+      {publishWebsiteSuccess && (
+        <div className="p-3 rounded-md bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center justify-between gap-2 font-medium">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+            <span>{publishWebsiteSuccess}</span>
+          </div>
+          <a
+            href="http://localhost:3000/blog"
+            target="_blank"
+            rel="noreferrer"
+            className="underline hover:text-emerald-950 shrink-0 font-semibold"
+          >
+            Open Website Blog &rarr;
+          </a>
+        </div>
+      )}
+
+      {publishWebsiteError && (
+        <div className="p-3 rounded-md bg-amber-50 border border-amber-200 text-xs text-amber-800 flex items-center justify-between gap-2 font-medium">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+            <span>{publishWebsiteError}</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleOpenExportModal}
+            className="text-xs h-7 bg-white border-amber-300 text-amber-900"
+          >
+            Export JSON Instead
+          </Button>
+        </div>
+      )}
 
       {statusMessage && (
         <div className="p-2.5 rounded-md bg-orange-50 border border-orange-200 text-xs text-orange-800 flex items-center gap-2 font-medium">

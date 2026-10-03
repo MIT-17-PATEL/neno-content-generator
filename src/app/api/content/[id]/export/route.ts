@@ -62,15 +62,16 @@ export async function POST(
     };
 
     const dbVersions = await VersionService.listByContent(params.id);
-    const targetDbVersion = versionId
+    let targetDbVersion = versionId
       ? dbVersions.find((v) => v.id === versionId)
       : dbVersions[0];
 
     if (!targetDbVersion) {
-      return NextResponse.json(
-        { error: "No version found to export for this document" },
-        { status: 400 }
-      );
+      targetDbVersion = await VersionService.createVersion({
+        contentId: params.id,
+        content: `# ${dbItem.title}\n\n> **Executive Summary**: ${dbItem.excerpt || "Technical documentation and strategic implementation guide."}\n\n## 1. Overview\n\n${dbItem.excerpt || "Comprehensive guide."}`,
+        createdBy: auth.user.userId,
+      });
     }
 
     const targetVersion: ContentVersion = {
