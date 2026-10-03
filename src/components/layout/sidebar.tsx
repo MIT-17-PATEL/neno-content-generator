@@ -11,8 +11,12 @@ import {
   Sliders,
   Settings,
   Sparkles,
+  LogOut,
+  UserCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/features/auth/auth-context";
+import { WorkspaceSwitcher } from "@/components/layout/workspace-switcher";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -26,6 +30,7 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { user, signOut } = useAuth();
 
   return (
     <aside className="w-64 border-r border-studio-800/80 bg-studio-950/60 backdrop-blur-md flex flex-col shrink-0 min-h-screen">
@@ -38,14 +43,14 @@ export function Sidebar() {
           <span className="font-semibold text-sm tracking-tight text-white">
             AI Content Studio
           </span>
-          <span className="text-[11px] text-studio-400">Autonomous Content Engine</span>
+          <span className="text-[11px] text-studio-400">Autonomous Workspace</span>
         </div>
       </div>
 
       {/* Navigation Links */}
       <div className="flex-1 py-4 px-3 space-y-1">
         <div className="px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-studio-500">
-          Workspace
+          Navigation
         </div>
         {navigation.map((item) => {
           const isActive = pathname === item.href;
@@ -68,14 +73,26 @@ export function Sidebar() {
         })}
       </div>
 
-      {/* Bottom Workspace Badge */}
-      <div className="p-4 border-t border-studio-800/80">
-        <div className="p-3 rounded-lg bg-studio-900/60 border border-studio-800/60">
-          <div className="text-xs font-medium text-studio-200">Active Workspace</div>
-          <div className="text-[11px] text-studio-400 truncate mt-0.5">
-            Default Workspace
+      {/* Workspace Switcher & User Account */}
+      <div className="p-3 border-t border-studio-800/80 space-y-3">
+        <WorkspaceSwitcher />
+
+        {user && (
+          <div className="flex items-center justify-between px-2 pt-1">
+            <div className="flex items-center gap-2 truncate">
+              <UserCheck className="h-3.5 w-3.5 text-brand-400 shrink-0" />
+              <span className="text-xs text-studio-300 truncate">{user.name}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => signOut()}
+              title="Sign Out"
+              className="p-1 rounded text-studio-500 hover:text-red-400 hover:bg-studio-900 transition-colors"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </button>
           </div>
-        </div>
+        )}
       </div>
     </aside>
   );

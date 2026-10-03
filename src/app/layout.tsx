@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AuthProvider } from "@/features/auth/auth-context";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 
@@ -17,11 +18,13 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="bg-studio-950 text-studio-100 flex min-h-screen antialiased selection:bg-brand-500/30 selection:text-white">
-        <Sidebar />
-        <div className="flex-1 flex flex-col min-w-0">
-          <Header />
-          <main className="flex-1 p-8 overflow-y-auto">{children}</main>
-        </div>
+        <AuthProvider>
+          <Sidebar />
+          <div className="flex-1 flex flex-col min-w-0">
+            <Header />
+            <main className="flex-1 p-8 overflow-y-auto">{children}</main>
+          </div>
+        </AuthProvider>
       </body>
     </html>
   );

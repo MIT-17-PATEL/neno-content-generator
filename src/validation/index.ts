@@ -1,5 +1,26 @@
 import { z } from "zod";
 
+export const signUpSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+export const signInSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(1, "Password is required"),
+});
+
+export const createWorkspaceSchema = z.object({
+  name: z.string().min(2, "Workspace name must be at least 2 characters"),
+  description: z.string().optional(),
+});
+
+export const updateWorkspaceSchema = z.object({
+  name: z.string().min(2, "Workspace name must be at least 2 characters").optional(),
+  description: z.string().optional(),
+});
+
 export const brandSettingsSchema = z.object({
   brandName: z.string().min(1, "Brand name is required"),
   industry: z.string().min(1, "Industry is required"),
@@ -28,3 +49,9 @@ export const caseStudyInputSchema = z.object({
   resultsMetrics: z.string().min(5, "Results and metrics are required"),
   targetAudience: z.string().min(2, "Target audience is required"),
 });
+
+export type SignUpInput = z.infer<typeof signUpSchema>;
+export type SignInInput = z.infer<typeof signInSchema>;
+export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;
+export type UpdateWorkspaceInput = z.infer<typeof updateWorkspaceSchema>;
+export type BrandSettingsInput = z.infer<typeof brandSettingsSchema>;
