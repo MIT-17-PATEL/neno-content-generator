@@ -1,57 +1,46 @@
 # AI Content Studio — Development Progress Log
 
 ## Current Status
-- **Current Phase**: Phase 1 (Authentication + Workspace) — Completed
-- **Next Phase**: Phase 2 (Database Migrations & PostgreSQL Integration)
+- **Current Phase**: Phase 2 (Database Migrations & PostgreSQL Integration) — Completed
+- **Next Phase**: Phase 3 (Content Workspace UI)
 
 ---
 
-## Phase 1 — Authentication + Workspace
+## Phase 2 — Database
 
 ### 1. Completed Work
-- Implemented user and session authentication system using secure bcrypt password hashing and JWT standard tokens (`jose`).
-- Built server-side authorization and workspace tenant isolation guards (`src/server/auth-guard.ts`).
-- Created resilient data storage layer with multi-tenancy support (`src/server/data-store.ts`).
-- Built REST API endpoints for authentication:
-  - `POST /api/auth/signup`
-  - `POST /api/auth/signin`
-  - `POST /api/auth/signout`
-  - `GET /api/auth/me`
-- Built REST API endpoints for workspace and brand voice management:
-  - `GET /api/workspaces`
-  - `POST /api/workspaces`
-  - `GET /api/workspaces/:id`
-  - `PATCH /api/workspaces/:id`
-  - `GET /api/workspaces/:id/brand`
-  - `PUT /api/workspaces/:id/brand`
-- Created client-side Context providers and UI components:
-  - `AuthProvider` and `useAuth` hook (`src/features/auth/auth-context.tsx`)
-  - `WorkspaceSwitcher` modal component in the sidebar (`src/components/layout/workspace-switcher.tsx`)
-  - Sign In page (`src/app/auth/signin/page.tsx`)
-  - Sign Up page (`src/app/auth/signup/page.tsx`)
-  - Comprehensive Brand Voice & Workspace Settings page (`src/app/settings/page.tsx`) supporting Brand name, Industry, Audience, Tone, Writing style, Preferred terminology chip lists, and Prohibited terminology chip lists.
+- Designed and authored complete PostgreSQL DDL migration in [`src/db/migrations/001_initial_schema.sql`](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/db/migrations/001_initial_schema.sql) covering all 10 core entities:
+  - `users`: User profiles with timestamps and password hashes.
+  - `workspaces`: Tenant isolation boundary.
+  - `workspace_members`: Role-based access control (owner/admin/editor/viewer).
+  - `brand_settings`: Workspace brand voice, audience, tone, preferred & prohibited terminology.
+  - `content_items`: High-level articles and case studies with slug constraints and statuses.
+  - `content_versions`: Version-controlled immutable draft text and SEO metadata snapshots.
+  - `research_sources`: Grounding citations, publishers, retrieval dates, and notes.
+  - `generation_runs`: Complete agent pipeline execution logs, token usage, estimated costs, and errors.
+  - `media_assets`: Object storage keys and public URLs for generated/uploaded graphics.
+  - `prompts`: Versioned prompt templates.
+  - `exports`: Formatted markdown, HTML, and JSON export records.
+- Configured PostgreSQL pool client in [`src/db/client.ts`](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/db/client.ts).
+- Created migration runner [`src/db/migrate.ts`](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/db/migrate.ts) and seed script [`src/db/seed.ts`](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/db/seed.ts).
+- Built server-side repository services:
+  - [`ContentService`](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/services/content-service.ts)
+  - [`VersionService`](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/services/version-service.ts)
+  - [`ResearchService`](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/services/research-service.ts)
+  - [`GenerationService`](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/services/research-service.ts)
 
 ### 2. Files Created / Modified
+- `src/db/migrations/001_initial_schema.sql`
+- `src/db/client.ts`
+- `src/db/migrate.ts`
+- `src/db/seed.ts`
+- `src/services/content-service.ts`
+- `src/services/version-service.ts`
+- `src/services/research-service.ts`
+- `src/services/index.ts`
 - `package.json`
-- `src/lib/auth.ts`
-- `src/server/auth-guard.ts`
-- `src/server/data-store.ts`
-- `src/validation/index.ts`
-- `src/features/auth/auth-context.tsx`
-- `src/components/layout/workspace-switcher.tsx`
-- `src/components/layout/sidebar.tsx`
-- `src/components/layout/header.tsx`
-- `src/app/layout.tsx`
-- `src/app/auth/signin/page.tsx`
-- `src/app/auth/signup/page.tsx`
-- `src/app/settings/page.tsx`
-- `src/app/api/auth/signup/route.ts`
-- `src/app/api/auth/signin/route.ts`
-- `src/app/api/auth/signout/route.ts`
-- `src/app/api/auth/me/route.ts`
-- `src/app/api/workspaces/route.ts`
-- `src/app/api/workspaces/[id]/route.ts`
-- `src/app/api/workspaces/[id]/brand/route.ts`
+- `docs/database.md`
+- `docs/development-progress.md`
 
 ### 3. Verification & Validation Gate
 - `npm run lint` — Passed
