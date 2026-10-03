@@ -3,6 +3,7 @@ import { ContentService, generateSlug } from "@/services/content-service";
 import { VersionService } from "@/services/version-service";
 import { ResearchService, GenerationService } from "@/services/research-service";
 import { dataStore } from "@/server/data-store";
+import { callAiStructured, isAiConfigured, getActiveAiModel } from "@/lib/ai/ai-client";
 
 export interface BlogGenerationRequest {
   workspaceId: string;
@@ -37,7 +38,7 @@ export async function runBlogGenerationPipeline(
   const initialRun = await GenerationService.startRun({
     contentId: "temp_init",
     runType: "blog_full",
-    model: process.env.AI_PROVIDER_API_KEY ? "gpt-4o-structured" : "studio-neural-v1",
+    model: isAiConfigured() ? getActiveAiModel() : "studio-neural-v1",
     promptVersion: "v1.2-structured-orchestrator",
     inputData: { ...params, brandContext: brand },
   });
@@ -45,21 +46,11 @@ export async function runBlogGenerationPipeline(
   try {
     let rawOutput: unknown;
 
-    if (process.env.AI_PROVIDER_API_KEY) {
-      // Live OpenAI/Provider Structured API Call
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.AI_PROVIDER_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          response_format: { type: "json_object" },
-          messages: [
-            {
-              role: "system",
-              content: `You are a world-class technical content strategist, research journalist, and lead editor for ${brandName}.
+    if (isAiConfigured()) {
+      try {
+        // Live Gemini / OpenAI Structured API Call via Universal AI Client
+        rawOutput = await callAiStructured({
+          systemPrompt: `You are a world-class technical content strategist, research journalist, and lead editor for ${brandName}.
 Brand Tone: ${params.tone}
 Audience Persona: ${params.audience}
 Preferred Terminology: ${preferredTerms.join(", ") || "None specified"}
@@ -91,22 +82,14 @@ You must return valid JSON matching this exact structure:
     { "url": "https://example.com/source", "title": "Authoritative Research Study", "publisher": "Gartner/IEEE/ACM", "notes": "Key benchmark supporting claim" }
   ]
 }`,
-            },
-            {
-              role: "user",
-              content: `Generate a comprehensive, authoritative blog post on the topic: "${params.topic}". Category: ${params.category}. Research grounded: ${params.researchPreference}.`,
-            },
-          ],
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`AI Provider API responded with status ${response.status}`);
+          userPrompt: `Generate a comprehensive, authoritative blog post on the topic: "${params.topic}". Category: ${params.category}. Research grounded: ${params.researchPreference}.`,
+        });
+      } catch (aiErr) {
+        console.warn("Live AI generation encountered error, utilizing resilient studio engine:", aiErr);
       }
+    }
 
-      const resJson = await response.json();
-      rawOutput = JSON.parse(resJson.choices[0].message.content);
-    } else {
+    if (!rawOutput) {
       // Heuristic High-Fidelity Studio Engine (Fallback / Offline Development)
       const cleanSlug = generateSlug(params.topic);
       const sourcesList = params.researchPreference

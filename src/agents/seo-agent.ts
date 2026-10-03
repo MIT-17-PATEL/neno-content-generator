@@ -1,5 +1,6 @@
 import { AgentContext, SeoAgentOutput, WriterAgentOutput } from "./types";
 import { generateSlug } from "@/services/content-service";
+import { callAiStructured, isAiConfigured } from "@/lib/ai/ai-client";
 
 export class SeoAgent {
   static async execute(
@@ -10,21 +11,10 @@ export class SeoAgent {
   ): Promise<SeoAgentOutput> {
     const cleanSlug = generateSlug(topic);
 
-    if (process.env.AI_PROVIDER_API_KEY) {
+    if (isAiConfigured()) {
       try {
-        const response = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${process.env.AI_PROVIDER_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: "gpt-4o",
-            response_format: { type: "json_object" },
-            messages: [
-              {
-                role: "system",
-                content: `You are the SEO Optimization Agent.
+        const res = await callAiStructured<SeoAgentOutput>({
+          systemPrompt: `You are the SEO Optimization Agent.
 Generate search-optimized metadata, meta descriptions (under 160 chars), high-intent keywords, and internal link suggestions.
 Return JSON:
 {
@@ -34,18 +24,11 @@ Return JSON:
   "slug": "url-slug",
   "internalLinkSuggestions": ["Topic anchor 1", "Topic anchor 2"]
 }`,
-              },
-              {
-                role: "user",
-                content: `Optimize SEO for article titled "${writerOutput.title}" in category "${category}".`,
-              },
-            ],
-          }),
+          userPrompt: `Optimize SEO for article titled "${writerOutput.title}" in category "${category}".`,
         });
 
-        if (response.ok) {
-          const res = await response.json();
-          return JSON.parse(res.choices[0].message.content) as SeoAgentOutput;
+        if (res?.seoTitle && res?.metaDescription) {
+          return res;
         }
       } catch (err) {
         console.warn("SEO Agent fallback notice:", err);

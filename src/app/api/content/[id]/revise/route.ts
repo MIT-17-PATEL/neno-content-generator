@@ -4,6 +4,7 @@ import { VersionService } from "@/services/version-service";
 import { ContentService } from "@/services/content-service";
 import { dataStore } from "@/server/data-store";
 import { z } from "zod";
+import { callAiText, isAiConfigured } from "@/lib/ai/ai-client";
 
 const reviseSectionSchema = z.object({
   workspaceId: z.string().min(1),
@@ -40,34 +41,17 @@ export async function POST(
 
     let revisedSectionText = "";
 
-    if (process.env.AI_PROVIDER_API_KEY) {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.AI_PROVIDER_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          messages: [
-            {
-              role: "system",
-              content: `You are the Section Revision Agent for ${brandName}.
+    if (isAiConfigured()) {
+      try {
+        revisedSectionText = await callAiText({
+          systemPrompt: `You are the Section Revision Agent for ${brandName}.
 Tone: ${tone}
 Style: Direct, concise, technical, zero fluff.
 Rewrite the provided section text strictly adhering to the user's revision instructions. Return ONLY the rewritten section text in markdown.`,
-            },
-            {
-              role: "user",
-              content: `Section: "${parsed.data.sectionTitle}"\nInstruction: "${parsed.data.instruction}"\n\nCurrent Text:\n${parsed.data.currentText}`,
-            },
-          ],
-        }),
-      });
-
-      if (response.ok) {
-        const resJson = await response.json();
-        revisedSectionText = resJson.choices[0].message.content.trim();
+          userPrompt: `Section: "${parsed.data.sectionTitle}"\nInstruction: "${parsed.data.instruction}"\n\nCurrent Text:\n${parsed.data.currentText}`,
+        });
+      } catch (err) {
+        console.warn("AI revision error, falling back:", err);
       }
     }
 

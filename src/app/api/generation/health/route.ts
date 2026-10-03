@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/server/auth-guard";
 import { aiCircuitBreaker } from "@/lib/ai/resilience";
+import { getActiveAiModel, isAiConfigured } from "@/lib/ai/ai-client";
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -9,7 +10,7 @@ export async function GET(req: NextRequest) {
   const metrics = aiCircuitBreaker.getMetrics();
   return NextResponse.json({
     status: metrics.state,
-    provider: process.env.AI_PROVIDER_API_KEY ? "OpenAI API Active" : "Offline Heuristic Mode",
+    provider: isAiConfigured() ? `Active Provider (${getActiveAiModel()})` : "Offline Heuristic Mode",
     circuitBreaker: metrics,
     timestamp: new Date().toISOString(),
   });

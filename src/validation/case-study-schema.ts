@@ -23,8 +23,12 @@ export const caseStudyOutputSchema = z.object({
   conclusion: z.string().min(20, "Conclusion is required"),
   fullMarkdown: z.string().min(100, "Full markdown document is required"),
   seo: z.object({
-    seoTitle: z.string().max(70),
-    metaDescription: z.string().max(170),
+    seoTitle: z
+      .string()
+      .transform((val) => (val.length > 70 ? val.slice(0, 67) + "..." : val)),
+    metaDescription: z
+      .string()
+      .transform((val) => (val.length > 165 ? val.slice(0, 162) + "..." : val)),
     keywords: z.array(z.string()).min(1),
     slug: z.string(),
   }),

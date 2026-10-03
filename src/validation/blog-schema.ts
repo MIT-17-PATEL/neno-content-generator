@@ -13,8 +13,12 @@ export const blogGenerationOutputSchema = z.object({
   ),
   article: z.string().min(100, "Article content must be at least 100 characters"),
   seo: z.object({
-    seoTitle: z.string().max(70, "SEO title should ideally be under 70 characters"),
-    metaDescription: z.string().max(170, "Meta description should be under 170 characters"),
+    seoTitle: z
+      .string()
+      .transform((val) => (val.length > 70 ? val.slice(0, 67) + "..." : val)),
+    metaDescription: z
+      .string()
+      .transform((val) => (val.length > 165 ? val.slice(0, 162) + "..." : val)),
     keywords: z.array(z.string()).min(1, "At least one keyword is required"),
     slug: z.string(),
   }),

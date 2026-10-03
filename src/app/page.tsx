@@ -97,114 +97,131 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Metrics Row (Compact Stat Cards) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Content */}
-        <Card className="p-5 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-semibold uppercase tracking-wider">Total Content</span>
-            <Layers className="h-4 w-4 text-slate-400" />
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900">
-              {isLoading ? "—" : stats.total}
+      {/* Section 1: Overview & Metrics */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+            Workspace Overview
+          </h2>
+          <span className="text-xs text-slate-400">Real-time status</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Total Content */}
+          <Card className="p-5 flex flex-col justify-between border-slate-200 hover:border-slate-300 transition-colors">
+            <div className="flex items-center justify-between text-slate-500 pb-2 border-b border-slate-100">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-600">Total Content</span>
+              <Layers className="h-4 w-4 text-slate-400" />
             </div>
-            <p className="text-xs text-slate-500 mt-1">Across all categories</p>
-          </div>
-        </Card>
+            <div className="mt-3">
+              <div className="text-2xl font-bold text-slate-900">
+                {isLoading ? "—" : stats.total}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">Across all categories</p>
+            </div>
+          </Card>
 
-        {/* Drafts */}
-        <Card className="p-5 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-semibold uppercase tracking-wider">Drafts</span>
-            <Clock className="h-4 w-4 text-slate-400" />
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900">
-              {isLoading ? "—" : stats.drafts}
+          {/* Drafts */}
+          <Card className="p-5 flex flex-col justify-between border-slate-200 hover:border-slate-300 transition-colors">
+            <div className="flex items-center justify-between text-slate-500 pb-2 border-b border-slate-100">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-600">Drafts</span>
+              <Clock className="h-4 w-4 text-slate-400" />
             </div>
-            <p className="text-xs text-slate-500 mt-1">In progress & queued</p>
-          </div>
-        </Card>
+            <div className="mt-3">
+              <div className="text-2xl font-bold text-slate-900">
+                {isLoading ? "—" : stats.drafts}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">In progress & queued</p>
+            </div>
+          </Card>
 
-        {/* In Review */}
-        <Card className="p-5 flex flex-col justify-between border-l-4 border-l-amber-500">
-          <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-semibold uppercase tracking-wider">In Review</span>
-            <span className="h-2 w-2 rounded-full bg-amber-500" />
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900">
-              {isLoading ? "—" : stats.inReview}
+          {/* In Review */}
+          <Card className="p-5 flex flex-col justify-between border-slate-200 border-l-4 border-l-amber-500 hover:border-slate-300 transition-colors">
+            <div className="flex items-center justify-between text-slate-500 pb-2 border-b border-slate-100">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-600">In Review</span>
+              <span className="h-2 w-2 rounded-full bg-amber-500" />
             </div>
-            <p className="text-xs text-slate-500 mt-1">Awaiting editorial review</p>
-          </div>
-        </Card>
+            <div className="mt-3">
+              <div className="text-2xl font-bold text-slate-900">
+                {isLoading ? "—" : stats.inReview}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">Awaiting editorial review</p>
+            </div>
+          </Card>
 
-        {/* Published */}
-        <Card className="p-5 flex flex-col justify-between border-l-4 border-l-emerald-500">
-          <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-semibold uppercase tracking-wider">Published</span>
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900">
-              {isLoading ? "—" : stats.approved}
+          {/* Published */}
+          <Card className="p-5 flex flex-col justify-between border-slate-200 border-l-4 border-l-emerald-500 hover:border-slate-300 transition-colors">
+            <div className="flex items-center justify-between text-slate-500 pb-2 border-b border-slate-100">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-600">Published</span>
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
             </div>
-            <p className="text-xs text-emerald-600 font-medium mt-1">Production ready</p>
-          </div>
-        </Card>
-      </div>
+            <div className="mt-3">
+              <div className="text-2xl font-bold text-slate-900">
+                {isLoading ? "—" : stats.approved}
+              </div>
+              <p className="text-xs text-emerald-600 font-medium mt-1">Production ready</p>
+            </div>
+          </Card>
+        </div>
+      </section>
 
-      {/* Quick Launch Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="p-5 hover:border-slate-300 transition-colors">
-          <div className="flex items-start gap-3">
-            <div className="p-2.5 rounded-lg bg-orange-50 border border-orange-200 text-orange-600 shrink-0">
-              <FileText className="h-5 w-5" />
-            </div>
-            <div className="space-y-1 min-w-0">
-              <h3 className="text-sm font-semibold text-slate-900">Blog Post Generator</h3>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Generate structured, SEO-optimized technical blog posts and industry articles with verified citations.
-              </p>
-              <div className="pt-2">
-                <Link href="/create?type=blog">
-                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
-                    <span>New Blog Post</span>
-                    <ArrowRight className="h-3 w-3" />
-                  </Button>
-                </Link>
+      {/* Section 2: Creation Workflows */}
+      <section className="space-y-3 pt-2">
+        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+          Create & Generate
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="p-5 border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all">
+            <div className="flex items-start gap-3.5">
+              <div className="p-2.5 rounded-lg bg-orange-50 border border-orange-200 text-orange-600 shrink-0">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div className="space-y-1 min-w-0">
+                <h3 className="text-sm font-semibold text-slate-900">Blog Post Generator</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Generate structured, SEO-optimized technical blog posts and industry articles with verified citations.
+                </p>
+                <div className="pt-2.5">
+                  <Link href="/create?type=blog">
+                    <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 border-slate-200">
+                      <span>New Blog Post</span>
+                      <ArrowRight className="h-3 w-3" />
+                    </Button>
+                  </Link>
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
 
-        <Card className="p-5 hover:border-slate-300 transition-colors">
-          <div className="flex items-start gap-3">
-            <div className="p-2.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 shrink-0">
-              <TrendingUp className="h-5 w-5" />
-            </div>
-            <div className="space-y-1 min-w-0">
-              <h3 className="text-sm font-semibold text-slate-900">Case Study Generator</h3>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Formulate data-driven customer success stories with challenge, solution, and impact metrics.
-              </p>
-              <div className="pt-2">
-                <Link href="/create?type=case-study">
-                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
-                    <span>New Case Study</span>
-                    <ArrowRight className="h-3 w-3" />
-                  </Button>
-                </Link>
+          <Card className="p-5 border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all">
+            <div className="flex items-start gap-3.5">
+              <div className="p-2.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 shrink-0">
+                <TrendingUp className="h-5 w-5" />
+              </div>
+              <div className="space-y-1 min-w-0">
+                <h3 className="text-sm font-semibold text-slate-900">Case Study Generator</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Formulate data-driven customer success stories with challenge, solution, and impact metrics.
+                </p>
+                <div className="pt-2.5">
+                  <Link href="/create?type=case-study">
+                    <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 border-slate-200">
+                      <span>New Case Study</span>
+                      <ArrowRight className="h-3 w-3" />
+                    </Button>
+                  </Link>
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
-      </div>
+          </Card>
+        </div>
+      </section>
 
-      {/* Recent Content Table */}
-      <Card>
+      {/* Section 3: Recent Activity & Content */}
+      <section className="space-y-3 pt-2">
+        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+          Recent Documents
+        </h2>
+        <Card className="border-slate-200 overflow-hidden shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between p-5 border-b border-slate-100">
           <div>
             <CardTitle className="text-base font-semibold text-slate-900">
@@ -289,6 +306,7 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
+      </section>
     </div>
   );
 }

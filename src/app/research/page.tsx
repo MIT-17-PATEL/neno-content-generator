@@ -46,7 +46,7 @@ export default function ResearchPage() {
   const [newPublisher, setNewPublisher] = useState("");
   const [newNotes, setNewNotes] = useState("");
   const [newRelevance, setNewRelevance] = useState("Primary Empirical Reference");
-  const [targetContentId, setTargetContentId] = useState("");
+  const [targetContentId, setTargetContentId] = useState("general");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -66,7 +66,7 @@ export default function ResearchPage() {
       if (contentRes.ok) {
         const cData = await contentRes.json();
         setContentItems(cData.items || []);
-        if (cData.items?.length > 0 && !targetContentId) {
+        if (cData.items?.length > 0 && targetContentId === "general") {
           setTargetContentId(cData.items[0].id);
         }
       }
@@ -83,7 +83,7 @@ export default function ResearchPage() {
 
   const handleAddSource = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeWorkspace || !newUrl.trim() || !newTitle.trim() || !targetContentId) return;
+    if (!activeWorkspace || !newUrl.trim() || !newTitle.trim()) return;
 
     setIsSubmitting(true);
     setErrorMessage("");
@@ -94,7 +94,7 @@ export default function ResearchPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workspaceId: activeWorkspace.id,
-          contentId: targetContentId,
+          contentId: targetContentId || "general",
           url: newUrl,
           title: newTitle,
           publisher: newPublisher,
@@ -314,14 +314,16 @@ export default function ResearchPage() {
                   Associated Content Draft
                 </label>
                 <select
-                  required
                   value={targetContentId}
                   onChange={(e) => setTargetContentId(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                  className="w-full h-9 bg-white border border-slate-200 rounded-md px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors cursor-pointer"
                 >
+                  <option value="general">
+                    Workspace General Repository {contentItems.length === 0 ? "(No drafts created yet)" : ""}
+                  </option>
                   {contentItems.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.title} ({item.type})
+                      {item.title} ({item.type.replace("-", " ")})
                     </option>
                   ))}
                 </select>

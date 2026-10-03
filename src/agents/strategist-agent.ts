@@ -1,4 +1,5 @@
 import { AgentContext, ResearchAgentOutput, StrategistAgentOutput } from "./types";
+import { callAiStructured, isAiConfigured } from "@/lib/ai/ai-client";
 
 export class StrategistAgent {
   static async execute(
@@ -9,21 +10,10 @@ export class StrategistAgent {
   ): Promise<StrategistAgentOutput> {
     const brandName = context.brandContext?.brandName || "Enterprise";
 
-    if (process.env.AI_PROVIDER_API_KEY) {
+    if (isAiConfigured()) {
       try {
-        const response = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${process.env.AI_PROVIDER_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: "gpt-4o",
-            response_format: { type: "json_object" },
-            messages: [
-              {
-                role: "system",
-                content: `You are the Content Strategist for ${brandName}. Your goal is to establish the article angle, structural outline, and section objectives for ${audience}.
+        const res = await callAiStructured<StrategistAgentOutput>({
+          systemPrompt: `You are the Content Strategist for ${brandName}. Your goal is to establish the article angle, structural outline, and section objectives for ${audience}.
 Research: ${research.summary}
 Key Facts: ${research.keyFacts.join("; ")}
 
@@ -35,18 +25,11 @@ Return JSON:
   ],
   "recommendedExamples": ["Example 1", "Example 2"]
 }`,
-              },
-              {
-                role: "user",
-                content: `Create a content strategy for: "${topic}".`,
-              },
-            ],
-          }),
+          userPrompt: `Create a content strategy for: "${topic}".`,
         });
 
-        if (response.ok) {
-          const res = await response.json();
-          return JSON.parse(res.choices[0].message.content) as StrategistAgentOutput;
+        if (res?.angle && res?.outline) {
+          return res;
         }
       } catch (err) {
         console.warn("Strategist Agent fallback notice:", err);

@@ -3,6 +3,7 @@ import { ContentService, generateSlug } from "@/services/content-service";
 import { VersionService } from "@/services/version-service";
 import { GenerationService } from "@/services/research-service";
 import { dataStore } from "@/server/data-store";
+import { callAiStructured, isAiConfigured, getActiveAiModel } from "@/lib/ai/ai-client";
 
 export interface CaseStudyGenerationRequest {
   workspaceId: string;
@@ -32,7 +33,7 @@ export async function runCaseStudyGenerationPipeline(
   const initialRun = await GenerationService.startRun({
     contentId: "temp_case_study",
     runType: "case_study",
-    model: process.env.AI_PROVIDER_API_KEY ? "gpt-4o-structured" : "studio-neural-v1",
+    model: isAiConfigured() ? getActiveAiModel() : "studio-neural-v1",
     promptVersion: "v1.0-case-study-engine",
     inputData: { ...params, brandContext: brand },
   });
@@ -40,20 +41,10 @@ export async function runCaseStudyGenerationPipeline(
   try {
     let rawOutput: unknown;
 
-    if (process.env.AI_PROVIDER_API_KEY) {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.AI_PROVIDER_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          response_format: { type: "json_object" },
-          messages: [
-            {
-              role: "system",
-              content: `You are the Principal Enterprise Case Study Architect for ${brandName}.
+    if (isAiConfigured()) {
+      try {
+        rawOutput = await callAiStructured({
+          systemPrompt: `You are the Principal Enterprise Case Study Architect for ${brandName}.
 Tone: ${tone}
 Target Audience: ${params.targetAudience}
 Preferred Terms: ${preferredTerms.join(", ")}
@@ -80,22 +71,14 @@ Generate a structured B2B Case Study in JSON matching:
   "seo": { "seoTitle": "Title", "metaDescription": "Description", "keywords": ["k1", "k2"], "slug": "url-slug" },
   "featuredVisual": { "brief": "Visual description", "prompt": "Diffusion prompt", "altText": "Alt text" }
 }`,
-            },
-            {
-              role: "user",
-              content: `Create case study for: Client/Industry: ${params.clientIndustry}. Challenge: ${params.businessChallenge}. Existing: ${params.existingProcess}. Solution: ${params.proposedSolution}. Tech: ${params.technology}. Results: ${params.resultsMetrics}.`,
-            },
-          ],
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`AI Provider API responded with status ${response.status}`);
+          userPrompt: `Create case study for: Client/Industry: ${params.clientIndustry}. Challenge: ${params.businessChallenge}. Existing: ${params.existingProcess}. Solution: ${params.proposedSolution}. Tech: ${params.technology}. Results: ${params.resultsMetrics}.`,
+        });
+      } catch (aiErr) {
+        console.warn("Live case study generation error, utilizing resilient studio engine:", aiErr);
       }
+    }
 
-      const resJson = await response.json();
-      rawOutput = JSON.parse(resJson.choices[0].message.content);
-    } else {
+    if (!rawOutput) {
       // Heuristic Fallback
       const baseSlug = generateSlug(`${params.clientIndustry} Case Study`);
       const techArray = params.technology.split(/[,+]/).map((t) => t.trim()).filter(Boolean);

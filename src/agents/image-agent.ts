@@ -1,4 +1,5 @@
 import { AgentContext, ImageAgentOutput, WriterAgentOutput } from "./types";
+import { callAiStructured, isAiConfigured } from "@/lib/ai/ai-client";
 
 export class ImageAgent {
   static async execute(
@@ -7,21 +8,10 @@ export class ImageAgent {
     writerOutput: WriterAgentOutput,
     context: AgentContext
   ): Promise<ImageAgentOutput> {
-    if (process.env.AI_PROVIDER_API_KEY) {
+    if (isAiConfigured()) {
       try {
-        const response = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${process.env.AI_PROVIDER_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: "gpt-4o",
-            response_format: { type: "json_object" },
-            messages: [
-              {
-                role: "system",
-                content: `You are the Image Generation & Visual Direction Agent.
+        const res = await callAiStructured<ImageAgentOutput>({
+          systemPrompt: `You are the Image Generation & Visual Direction Agent.
 Create a visual brief, text-to-image prompt, and accessibility alt text for a featured hero image.
 Return JSON:
 {
@@ -29,18 +19,11 @@ Return JSON:
   "generationPrompt": "Detailed diffusion prompt",
   "altText": "Descriptive accessibility text"
 }`,
-              },
-              {
-                role: "user",
-                content: `Create a featured visual brief for: "${topic}".`,
-              },
-            ],
-          }),
+          userPrompt: `Create a featured visual brief for: "${topic}".`,
         });
 
-        if (response.ok) {
-          const res = await response.json();
-          return JSON.parse(res.choices[0].message.content) as ImageAgentOutput;
+        if (res?.generationPrompt && res?.imageBrief) {
+          return res;
         }
       } catch (err) {
         console.warn("Image Agent fallback notice:", err);

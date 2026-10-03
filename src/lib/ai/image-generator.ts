@@ -52,8 +52,9 @@ export class ImageGenerator {
     const aspectRatio = options.aspectRatio || "16:9";
     const { prompt, altText } = this.buildPrompt(options);
 
-    // If OpenAI API Key is provided, call DALL-E 3
-    if (process.env.AI_PROVIDER_API_KEY) {
+    // If OpenAI API Key is provided (sk- prefix), call DALL-E 3
+    const apiKey = process.env.OPENAI_API_KEY || process.env.AI_PROVIDER_API_KEY;
+    if (apiKey && apiKey.startsWith("sk-")) {
       try {
         const sizeMap: Record<ImageAspectRatio, "1792x1024" | "1024x1024" | "1024x1792"> = {
           "16:9": "1792x1024",

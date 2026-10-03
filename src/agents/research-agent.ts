@@ -1,5 +1,6 @@
 import { AgentContext, ResearchAgentOutput } from "./types";
 import { generateSlug } from "@/services/content-service";
+import { callAiStructured, isAiConfigured } from "@/lib/ai/ai-client";
 
 export class ResearchAgent {
   static async execute(
@@ -10,21 +11,10 @@ export class ResearchAgent {
     const brandName = context.brandContext?.brandName || "Enterprise";
     const cleanSlug = generateSlug(topic);
 
-    if (process.env.AI_PROVIDER_API_KEY) {
+    if (isAiConfigured()) {
       try {
-        const response = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${process.env.AI_PROVIDER_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: "gpt-4o",
-            response_format: { type: "json_object" },
-            messages: [
-              {
-                role: "system",
-                content: `You are the Research Agent for ${brandName}. Your responsibility is to synthesize factual data, empirical findings, and authoritative citations.
+        const res = await callAiStructured<ResearchAgentOutput>({
+          systemPrompt: `You are the Research Agent for ${brandName}. Your responsibility is to synthesize factual data, empirical findings, and authoritative citations.
 Return JSON:
 {
   "summary": "Concise summary of research landscape",
@@ -34,18 +24,11 @@ Return JSON:
   ],
   "openQuestions": ["Technical question 1", "Question 2"]
 }`,
-              },
-              {
-                role: "user",
-                content: `Conduct in-depth technical research on: "${topic}". Category: ${category}.`,
-              },
-            ],
-          }),
+          userPrompt: `Conduct in-depth technical research on: "${topic}". Category: ${category}.`,
         });
 
-        if (response.ok) {
-          const res = await response.json();
-          return JSON.parse(res.choices[0].message.content) as ResearchAgentOutput;
+        if (res?.summary && Array.isArray(res?.sources)) {
+          return res;
         }
       } catch (err) {
         console.warn("Live Research Agent fallback notice:", err);

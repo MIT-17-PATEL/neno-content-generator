@@ -438,7 +438,7 @@ export default function ContentDetailPage() {
   return (
     <div className="space-y-5 max-w-7xl mx-auto">
       {/* Top Header & Workflow Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-lg bg-white border border-slate-200 shadow-sm">
         <div className="flex items-center gap-3">
           <Link
             href="/content"
@@ -459,7 +459,7 @@ export default function ContentDetailPage() {
                 <Badge variant="outline" className="text-[10px]">Draft v1</Badge>
               )}
             </div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight mt-0.5">
+            <h1 className="text-lg font-bold text-slate-900 tracking-tight mt-0.5">
               {item.title}
             </h1>
           </div>
@@ -494,7 +494,7 @@ export default function ContentDetailPage() {
               setReviseSelectedText(editorContent.slice(0, 400));
               setIsReviseModalOpen(true);
             }}
-            className="gap-1.5 text-xs h-8"
+            className="gap-1.5 text-xs h-8 border-slate-200"
           >
             <Wand2 className="h-3.5 w-3.5 text-orange-600" />
             <span>Rewrite</span>
@@ -518,7 +518,7 @@ export default function ContentDetailPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => handleStatusChange("draft")}
-                className="text-xs h-8"
+                className="text-xs h-8 border-slate-200"
               >
                 <RotateCcw className="h-3 w-3 mr-1" />
                 <span>Revert</span>
@@ -539,7 +539,7 @@ export default function ContentDetailPage() {
             variant="outline"
             size="sm"
             onClick={handleOpenExportModal}
-            className="gap-1.5 text-xs h-8 font-medium"
+            className="gap-1.5 text-xs h-8 font-medium border-slate-200"
           >
             <Download className="h-3.5 w-3.5 text-slate-600" />
             <span>Export</span>
@@ -550,7 +550,7 @@ export default function ContentDetailPage() {
             size="sm"
             onClick={handleManualSave}
             disabled={isAutosaving}
-            className="gap-1.5 text-xs h-8 font-semibold"
+            className="gap-1.5 text-xs h-8 font-semibold bg-orange-600 hover:bg-orange-700"
           >
             <Save className="h-3.5 w-3.5" />
             <span>Save</span>
@@ -569,6 +569,21 @@ export default function ContentDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
         {/* Editor & Content Area (3 columns) */}
         <div className="lg:col-span-3 space-y-3">
+          {/* Document Title & Overview Card */}
+          <div className="bg-white border border-slate-200 p-4 rounded-lg shadow-sm flex items-center justify-between">
+            <div>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                Active Document
+              </span>
+              <h2 className="text-base font-bold text-slate-900 mt-0.5">
+                {item.title}
+              </h2>
+            </div>
+            <Badge variant="outline" className="text-xs bg-slate-50 font-mono">
+              {item.category}
+            </Badge>
+          </div>
+
           {/* Tabs Bar */}
           <div className="flex items-center justify-between bg-white border border-slate-200 px-3 py-1.5 rounded-t-lg shadow-sm overflow-x-auto">
             <div className="flex items-center gap-1">
@@ -585,7 +600,7 @@ export default function ContentDetailPage() {
                   onClick={() => setActiveTab(tab.key as typeof activeTab)}
                   className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${
                     activeTab === tab.key
-                      ? "bg-slate-100 text-slate-900 font-semibold"
+                      ? "bg-slate-100 text-slate-900 font-semibold border border-slate-200"
                       : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                   }`}
                 >

@@ -1,4 +1,5 @@
 import { AgentContext, ResearchAgentOutput, StrategistAgentOutput, WriterAgentOutput } from "./types";
+import { callAiStructured, isAiConfigured } from "@/lib/ai/ai-client";
 
 export class WriterAgent {
   static async execute(
@@ -14,21 +15,10 @@ export class WriterAgent {
     const prohibitedTerms = context.brandContext?.prohibitedTerms || [];
     const styleGuidelines = context.brandContext?.styleGuidelines || "";
 
-    if (process.env.AI_PROVIDER_API_KEY) {
+    if (isAiConfigured()) {
       try {
-        const response = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${process.env.AI_PROVIDER_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: "gpt-4o",
-            response_format: { type: "json_object" },
-            messages: [
-              {
-                role: "system",
-                content: `You are the Lead Writer Agent for ${brandName}.
+        const res = await callAiStructured<WriterAgentOutput>({
+          systemPrompt: `You are the Lead Writer Agent for ${brandName}.
 Tone: ${tone}
 Target Length: ~${targetWords} words.
 Preferred Terms: ${preferredTerms.join(", ") || "None"}
@@ -45,18 +35,11 @@ Return JSON:
   "excerpt": "Executive summary (2-3 sentences)",
   "content": "Full markdown text including ## headings, data tables, code blocks, and key takeaways."
 }`,
-              },
-              {
-                role: "user",
-                content: `Write the full technical article on "${topic}".`,
-              },
-            ],
-          }),
+          userPrompt: `Write the full technical article on "${topic}".`,
         });
 
-        if (response.ok) {
-          const res = await response.json();
-          return JSON.parse(res.choices[0].message.content) as WriterAgentOutput;
+        if (res?.content && res?.title) {
+          return res;
         }
       } catch (err) {
         console.warn("Writer Agent fallback notice:", err);
