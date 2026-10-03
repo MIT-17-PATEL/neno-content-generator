@@ -1,48 +1,47 @@
 # AI Content Studio — Development Progress Log
 
 ## Current Status
-- **Current Phase**: Phase 2 (Database Migrations & PostgreSQL Integration) — Completed
-- **Next Phase**: Phase 3 (Content Workspace UI)
+- **Current Phase**: Phase 3 (Content Workspace UI) — Completed
+- **Next Phase**: Phase 4 (Blog Generation Engine)
 
 ---
 
-## Phase 2 — Database
+## Phase 3 — Content Workspace
 
 ### 1. Completed Work
-- Designed and authored complete PostgreSQL DDL migration in [`src/db/migrations/001_initial_schema.sql`](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/db/migrations/001_initial_schema.sql) covering all 10 core entities:
-  - `users`: User profiles with timestamps and password hashes.
-  - `workspaces`: Tenant isolation boundary.
-  - `workspace_members`: Role-based access control (owner/admin/editor/viewer).
-  - `brand_settings`: Workspace brand voice, audience, tone, preferred & prohibited terminology.
-  - `content_items`: High-level articles and case studies with slug constraints and statuses.
-  - `content_versions`: Version-controlled immutable draft text and SEO metadata snapshots.
-  - `research_sources`: Grounding citations, publishers, retrieval dates, and notes.
-  - `generation_runs`: Complete agent pipeline execution logs, token usage, estimated costs, and errors.
-  - `media_assets`: Object storage keys and public URLs for generated/uploaded graphics.
-  - `prompts`: Versioned prompt templates.
-  - `exports`: Formatted markdown, HTML, and JSON export records.
-- Configured PostgreSQL pool client in [`src/db/client.ts`](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/db/client.ts).
-- Created migration runner [`src/db/migrate.ts`](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/db/migrate.ts) and seed script [`src/db/seed.ts`](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/db/seed.ts).
-- Built server-side repository services:
-  - [`ContentService`](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/services/content-service.ts)
-  - [`VersionService`](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/services/version-service.ts)
-  - [`ResearchService`](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/services/research-service.ts)
-  - [`GenerationService`](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/services/research-service.ts)
+- Built comprehensive REST API endpoints for content item lifecycle and version snapshots:
+  - `GET /api/content`: Filter workspace content by type (`blog`, `case-study`), status (`draft`, `in_review`, `approved`, `exported`), and search query.
+  - `POST /api/content`: Create content draft with automatic initial Version 1 snapshot and slug generation.
+  - `GET /api/content/:id`: Retrieve content item with current version, full version history, and attached research sources.
+  - `PATCH /api/content/:id`: Update workflow status, title, category, or excerpt.
+  - `DELETE /api/content/:id`: Delete content item with workspace permission check.
+  - `GET /api/content/:id/versions`: Fetch version history for an article.
+  - `POST /api/content/:id/versions`: Save manual edits as a new immutable version snapshot.
+  - `GET /api/dashboard/stats`: Live metric aggregation for total content, active drafts, review queue, and approved items.
+- Built interactive Content Library UI ([`src/app/content/page.tsx`](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/app/content/page.tsx)):
+  - Type filters (`All Types`, `Blogs`, `Case Studies`).
+  - Status filters (`Draft`, `In Review`, `Approved`, `Exported`).
+  - Real-time search by title and summary text.
+  - Modal to create new drafts.
+  - Item deletion with confirmation.
+- Built Content Detail & Editor View ([`src/app/content/[id]/page.tsx`](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/app/content/%5Bid%5D/page.tsx)):
+  - Multi-tab workspace: Draft Editor, Version History, and Retained Research Citations.
+  - Real-time word counter and character counter.
+  - Workflow status transition triggers (`Submit for Review`, `Approve Content`, `Revert to Draft`, `Mark as Exported`).
+  - Ability to save new versions and restore prior snapshots to the editor.
+- Updated Dashboard ([`src/app/page.tsx`](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/app/page.tsx)) with dynamic stats and recent content feed.
 
 ### 2. Files Created / Modified
-- `src/db/migrations/001_initial_schema.sql`
-- `src/db/client.ts`
-- `src/db/migrate.ts`
-- `src/db/seed.ts`
-- `src/services/content-service.ts`
-- `src/services/version-service.ts`
-- `src/services/research-service.ts`
-- `src/services/index.ts`
-- `package.json`
-- `docs/database.md`
+- `src/app/api/content/route.ts`
+- `src/app/api/content/[id]/route.ts`
+- `src/app/api/content/[id]/versions/route.ts`
+- `src/app/api/dashboard/stats/route.ts`
+- `src/app/content/page.tsx`
+- `src/app/content/[id]/page.tsx`
+- `src/app/page.tsx`
 - `docs/development-progress.md`
 
 ### 3. Verification & Validation Gate
 - `npm run lint` — Passed
-- `npx tsc --noEmit` — Passed
+- `npm run type-check` — Passed
 - `npm run build` — Passed

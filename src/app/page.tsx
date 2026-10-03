@@ -1,3 +1,6 @@
+"use client";
+
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   FileText,
@@ -8,53 +11,87 @@ import {
   TrendingUp,
   Layers,
   BookOpen,
+  Plus,
+  Eye,
 } from "lucide-react";
+import { useAuth } from "@/features/auth/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ContentItem } from "@/types";
 
 export default function DashboardPage() {
-  const stats = [
+  const { activeWorkspace } = useAuth();
+  const [stats, setStats] = useState({
+    total: 0,
+    drafts: 0,
+    inReview: 0,
+    approved: 0,
+  });
+  const [recentItems, setRecentItems] = useState<ContentItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchDashboardData = useCallback(async () => {
+    if (!activeWorkspace) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/dashboard/stats?workspaceId=${activeWorkspace.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setStats(data.stats);
+        setRecentItems(data.recent || []);
+      }
+    } catch (err) {
+      console.error("Dashboard stats error:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [activeWorkspace]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  const statCards = [
     {
       title: "Total Content",
-      value: "0",
+      value: stats.total.toString(),
       description: "Across all categories",
       icon: Layers,
-      trend: "+0 this week",
     },
     {
-      title: "Drafts",
-      value: "0",
+      title: "Drafts & Generating",
+      value: stats.drafts.toString(),
       description: "In progress or queued",
       icon: Clock,
-      badge: "Drafts",
     },
     {
       title: "In Review",
-      value: "0",
+      value: stats.inReview.toString(),
       description: "Awaiting human review",
       icon: BookOpen,
-      badge: "Pending",
     },
     {
       title: "Approved & Exported",
-      value: "0",
+      value: stats.approved.toString(),
       description: "Production ready",
       icon: CheckCircle2,
-      badge: "Approved",
     },
   ];
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
-      {/* Top Banner / Welcome */}
+      {/* Top Welcome / Action Bar */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-studio-800/60 pb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">
-            Content Dashboard
-          </h1>
-          <p className="text-sm text-studio-400 mt-1">
-            Autonomous multi-agent content generation & editorial workspace
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-2xl font-bold text-white tracking-tight">
+              Content Dashboard
+            </h1>
+            <Badge variant="info">{activeWorkspace?.name || "Workspace"}</Badge>
+          </div>
+          <p className="text-sm text-studio-400">
+            Autonomous multi-agent content generation & editorial control center
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -74,7 +111,7 @@ export default function DashboardPage() {
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        {stats.map((stat) => {
+        {statCards.map((stat) => {
           const Icon = stat.icon;
           return (
             <Card key={stat.title} className="relative overflow-hidden">
@@ -87,7 +124,7 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="text-3xl font-bold text-white tracking-tight mt-1">
-                {stat.value}
+                {isLoading ? "..." : stat.value}
               </div>
               <p className="text-xs text-studio-500 mt-1">{stat.description}</p>
             </Card>
@@ -140,25 +177,91 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Recent Activity Table Placeholder */}
+      {/* Recent Activity Table */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-4">
           <div>
             <CardTitle>Recent Content Items</CardTitle>
             <CardDescription>
-              Drafts and generated assets requiring review
+              Articles and case studies in <strong>{activeWorkspace?.name}</strong>
             </CardDescription>
           </div>
-          <Badge variant="outline">0 Total Items</Badge>
+          <Link href="/content">
+            <Button variant="ghost" size="sm" className="gap-1 text-xs">
+              <span>View All</span>
+              <ArrowRight className="h-3 w-3" />
+            </Button>
+          </Link>
         </CardHeader>
-        <div className="border border-dashed border-studio-800 rounded-lg p-12 text-center">
-          <p className="text-sm text-studio-400">
-            No content generated yet in this workspace.
-          </p>
-          <p className="text-xs text-studio-500 mt-1">
-            Start a new generation workflow above to begin producing research-backed articles.
-          </p>
-        </div>
+
+        {isLoading ? (
+          <div className="p-8 text-center text-xs text-studio-500">
+            Loading dashboard data...
+          </div>
+        ) : recentItems.length === 0 ? (
+          <div className="border border-dashed border-studio-800 rounded-lg p-12 text-center">
+            <p className="text-sm text-studio-400">
+              No content items generated yet in this workspace.
+            </p>
+            <p className="text-xs text-studio-500 mt-1">
+              Start by creating a new manual draft or initiating an autonomous generation workflow above.
+            </p>
+            <Link href="/content">
+              <Button variant="primary" size="sm" className="mt-4 gap-1.5">
+                <Plus className="h-3.5 w-3.5" />
+                <span>Create Content Item</span>
+              </Button>
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {recentItems.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between p-3.5 rounded-lg border border-studio-800 bg-studio-950/60 hover:border-studio-700 transition-colors"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={`h-7 w-7 rounded flex items-center justify-center shrink-0 ${
+                      item.type === "blog"
+                        ? "bg-brand-950 text-brand-400"
+                        : "bg-emerald-950 text-emerald-400"
+                    }`}
+                  >
+                    {item.type === "blog" ? (
+                      <FileText className="h-3.5 w-3.5" />
+                    ) : (
+                      <TrendingUp className="h-3.5 w-3.5" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <Link
+                      href={`/content/${item.id}`}
+                      className="text-xs font-semibold text-white hover:text-brand-400 transition-colors truncate block"
+                    >
+                      {item.title}
+                    </Link>
+                    <span className="text-[11px] text-studio-500">
+                      Category: {item.category} • Updated:{" "}
+                      {new Date(item.updatedAt || Date.now()).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0">
+                  <Badge variant={item.status === "approved" ? "success" : item.status === "in_review" ? "warning" : "outline"}>
+                    {item.status.replace("_", " ")}
+                  </Badge>
+                  <Link href={`/content/${item.id}`}>
+                    <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs">
+                      <Eye className="h-3 w-3" />
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
     </div>
   );
