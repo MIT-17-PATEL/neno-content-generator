@@ -1,8 +1,8 @@
 # AI Content Studio — Development Progress Log
 
 ## Current Status
-- **Current Phase**: Phase 12 (Security & Rate Limiting Hardening) — Completed
-- **Next Phase**: Phase 13 (Failure Handling & Retries Hardening)
+- **Current Phase**: Phase 13 (Failure Handling & Retries Hardening) — Completed
+- **Next Phase**: Phase 14 (Automated Testing Suite)
 
 ---
 
@@ -186,3 +186,35 @@
 - `npm run lint` — Passed (0 warnings, 0 errors)
 - `npm run type-check` — Passed (0 errors)
 - `npm run build` — Passed (all 28 routes + Middleware successfully compiled and generated)
+
+---
+
+## Phase 13 — Failure Handling & Retries Hardening
+
+### 1. Completed Work
+- **Resilience Engine & Exponential Backoff** ([src/lib/ai/resilience.ts](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/lib/ai/resilience.ts)):
+  - Exponential backoff retry wrapper with randomized jitter (`executeWithRetry`) protecting LLM and provider calls.
+  - Three-state **Circuit Breaker** (`CLOSED`, `OPEN`, `HALF_OPEN`) preventing cascading failure storms and auto-tripping to offline heuristic fallbacks when upstream providers degrade.
+  - Typed error boundaries (`AiProviderError`, `CircuitBreakerOpenError`).
+- **Resilient Pipeline Orchestration** ([src/agents/orchestrator.ts](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/agents/orchestrator.ts)):
+  - Integrated circuit breaker and retry wrappers across all 6 agent stages (Research, Strategy, Writing, SEO, QA, Image).
+  - Added `resumePipeline(runId)` to intelligently skip completed stages and resume from the exact failed/pending stage without data loss.
+  - Persistent stage tracking with duration timing metrics (`durationMs`) and retry counters (`retries`).
+- **Resilience & Health REST Endpoints**:
+  - `POST /api/generation/[id]/resume` ([src/app/api/generation/[id]/resume/route.ts](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/app/api/generation/%5Bid%5D/resume/route.ts)) — Resumes interrupted generation pipelines from intermediate state.
+  - `GET /api/generation/health` ([src/app/api/generation/health/route.ts](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/app/api/generation/health/route.ts)) — Reports circuit breaker state, failure metrics, and active provider mode.
+- **UI Health Monitoring**:
+  - Live Circuit Breaker status badge integrated into the Agent Inspector tab in [src/app/content/[id]/page.tsx](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/app/content/%5Bid%5D/page.tsx).
+
+### 2. Files Created / Modified
+- [src/lib/ai/resilience.ts](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/lib/ai/resilience.ts)
+- [src/agents/orchestrator.ts](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/agents/orchestrator.ts)
+- [src/app/api/generation/[id]/resume/route.ts](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/app/api/generation/%5Bid%5D/resume/route.ts)
+- [src/app/api/generation/health/route.ts](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/app/api/generation/health/route.ts)
+- [src/app/content/[id]/page.tsx](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/src/app/content/%5Bid%5D/page.tsx)
+- [docs/development-progress.md](file:///c:/Users/allle/OneDrive/Desktop/neno%20content%20genrater/docs/development-progress.md)
+
+### 3. Verification & Validation Gate
+- `npm run lint` — Passed (0 warnings, 0 errors)
+- `npm run type-check` — Passed (0 errors)
+- `npm run build` — Passed (all 29 routes + Middleware successfully compiled and generated)

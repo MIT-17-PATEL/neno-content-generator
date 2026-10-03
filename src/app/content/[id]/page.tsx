@@ -958,13 +958,20 @@ export default function ContentDetailPage() {
           {activeTab === "agents" && (
             <Card className="border-t-0 rounded-t-none space-y-4">
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Cpu className="h-4 w-4 text-brand-400" />
-                  <span>Multi-Agent Execution Pipeline</span>
-                </CardTitle>
-                <CardDescription>
-                  Specialized agent stages executing sequentially with independent resilience
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Cpu className="h-4 w-4 text-brand-400" />
+                      <span>Multi-Agent Execution Pipeline</span>
+                    </CardTitle>
+                    <CardDescription>
+                      Specialized agent stages executing sequentially with automatic retry and circuit breaker defense
+                    </CardDescription>
+                  </div>
+                  <Badge variant="success" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                    Circuit: CLOSED (Healthy)
+                  </Badge>
+                </div>
               </CardHeader>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 pt-0">

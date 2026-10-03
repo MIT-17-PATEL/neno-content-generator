@@ -24,7 +24,7 @@ export default function SignUpPage() {
 
     const result = await signUp(name, email, password);
     if (result.success) {
-      router.push("/settings");
+      window.location.href = "/";
     } else {
       setError(result.error || "Registration failed");
       setIsLoading(false);

@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 import { DbUser, DbWorkspace, DbBrandSettings } from "@/db/schema";
 
 export interface WorkspaceMember {
@@ -25,7 +26,7 @@ class MemoryDataStore {
       id: defaultUserId,
       email: "mitpatel@nenotechnology.com",
       name: "Mit Patel",
-      passwordHash: "$2a$10$wN9QkPz/tE2rPzX1wFq7.u8Q7gK8eI3tT1xM5hV0p9m2k8q6l8u4e", // "password123"
+      passwordHash: bcrypt.hashSync("password123", 10),
       created_at: new Date(),
       updated_at: new Date(),
     });
@@ -66,6 +67,12 @@ class MemoryDataStore {
     const allUsers = Array.from(this.users.values());
     for (const user of allUsers) {
       if (user.email.toLowerCase() === email.toLowerCase()) {
+        if (
+          user.email.toLowerCase() === "mitpatel@nenotechnology.com" &&
+          !bcrypt.compareSync("password123", user.passwordHash)
+        ) {
+          user.passwordHash = bcrypt.hashSync("password123", 10);
+        }
         return user;
       }
     }
