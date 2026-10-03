@@ -95,3 +95,28 @@ export interface MediaAsset {
   metadata?: Record<string, unknown>;
   createdAt: string;
 }
+
+export type ExportFormat = "markdown" | "html" | "json";
+
+export interface ExportRecord {
+  id: string;
+  contentId: string;
+  format: ExportFormat;
+  storageKey?: string;
+  createdAt: string;
+}
+
+export interface ExportFormattedResult {
+  format: ExportFormat;
+  filename: string;
+  mimeType: string;
+  content: string;
+  metadata: {
+    title: string;
+    slug: string;
+    wordCount: number;
+    readingTimeMinutes: number;
+    exportedAt: string;
+    versionNumber: number;
+  };
+}

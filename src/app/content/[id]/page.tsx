@@ -30,12 +30,26 @@ import {
   Wrench,
   HelpCircle,
   Image as ImageIcon,
+  Download,
+  Code,
+  FileCheck,
+  FileCode,
+  X,
+  Copy,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ContentItem, ContentStatus, ContentVersion, MediaAsset } from "@/types";
+import {
+  ContentItem,
+  ContentStatus,
+  ContentVersion,
+  MediaAsset,
+  ExportFormat,
+  ExportRecord,
+  ExportFormattedResult,
+} from "@/types";
 import { SeoAnalysisResult } from "@/lib/analysis/seo-analyzer";
 import { QaAnalysisResult } from "@/lib/analysis/qa-analyzer";
 
@@ -72,6 +86,17 @@ export default function ContentDetailPage() {
   const [reviseInstruction, setReviseInstruction] = useState("");
   const [isRevising, setIsRevising] = useState(false);
   const [reviseError, setReviseError] = useState("");
+
+  // Export State
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("markdown");
+  const [exportIncludeFrontmatter, setExportIncludeFrontmatter] = useState(true);
+  const [exportStandaloneHtml, setExportStandaloneHtml] = useState(true);
+  const [exportMarkStatus, setExportMarkStatus] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportResult, setExportResult] = useState<ExportFormattedResult | null>(null);
+  const [exportHistory, setExportHistory] = useState<ExportRecord[]>([]);
+  const [isCopiedExport, setIsCopiedExport] = useState(false);
 
   // History Diff Comparison State
   const [selectedDiffVersion, setSelectedDiffVersion] = useState<ContentVersion | null>(null);
@@ -315,6 +340,78 @@ export default function ContentDetailPage() {
     }
   };
 
+  const fetchExportHistory = useCallback(async () => {
+    if (!activeWorkspace || !contentId) return;
+    try {
+      const res = await fetch(`/api/content/${contentId}/export?workspaceId=${activeWorkspace.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setExportHistory(data.exports || []);
+      }
+    } catch (err) {
+      console.error("Fetch export history error:", err);
+    }
+  }, [activeWorkspace, contentId]);
+
+  const handleOpenExportModal = () => {
+    setIsExportModalOpen(true);
+    handleGenerateExport(exportFormat);
+    fetchExportHistory();
+  };
+
+  const handleGenerateExport = async (format: ExportFormat) => {
+    if (!activeWorkspace || !contentId) return;
+    setIsExporting(true);
+    setExportFormat(format);
+    try {
+      const res = await fetch(`/api/content/${contentId}/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: activeWorkspace.id,
+          format,
+          versionId: currentVersion?.id,
+          includeFrontmatter: exportIncludeFrontmatter,
+          standaloneHtml: exportStandaloneHtml,
+          markAsExported: exportMarkStatus,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setExportResult(data.result);
+        if (exportMarkStatus && item && item.status !== "exported") {
+          setItem({ ...item, status: "exported" });
+        }
+        fetchExportHistory();
+      }
+    } catch (err) {
+      console.error("Export generation failed:", err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const downloadExportFile = () => {
+    if (!exportResult) return;
+    const blob = new Blob([exportResult.content], { type: exportResult.mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = exportResult.filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const copyExportContent = () => {
+    if (!exportResult) return;
+    navigator.clipboard.writeText(exportResult.content);
+    setIsCopiedExport(true);
+    setTimeout(() => setIsCopiedExport(false), 2000);
+  };
+
   const wordCount = editorContent.trim().split(/\s+/).filter(Boolean).length;
   const charCount = editorContent.length;
 
@@ -458,6 +555,16 @@ export default function ContentDetailPage() {
               <span>Mark as Exported</span>
             </Button>
           )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleOpenExportModal}
+            className="gap-1.5 text-xs border-indigo-500/40 text-indigo-300 hover:bg-indigo-950/40"
+          >
+            <Download className="h-3.5 w-3.5 text-indigo-400" />
+            <span>Export Content</span>
+          </Button>
 
           <Button
             variant="primary"
@@ -1121,6 +1228,216 @@ export default function ContentDetailPage() {
               </div>
             </form>
           </Card>
+        </div>
+      )}
+
+      {/* DOCUMENT EXPORT MODAL */}
+      {isExportModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-studio-900 border border-studio-800 rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150 max-h-[95vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-studio-800 pb-4">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 bg-indigo-500/10 rounded-xl text-indigo-400">
+                  <Download className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Export Document</h3>
+                  <p className="text-xs text-studio-400">
+                    Generate multi-format publication artifacts for web, Markdown repos, or headless CMS
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsExportModalOpen(false)}
+                className="text-studio-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Format Selection Tabs */}
+            <div className="grid grid-cols-3 gap-3">
+              <button
+                type="button"
+                onClick={() => handleGenerateExport("markdown")}
+                className={`p-3.5 rounded-xl text-left border transition-all ${
+                  exportFormat === "markdown"
+                    ? "bg-indigo-950/40 border-indigo-500 text-white shadow-sm shadow-indigo-500/10"
+                    : "bg-studio-950/60 border-studio-800 text-studio-400 hover:border-studio-700 hover:text-studio-200"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-white">Markdown (.md)</span>
+                  <FileCode className="w-4 h-4 text-indigo-400" />
+                </div>
+                <p className="text-[11px] text-studio-400">
+                  Frontmatter metadata + formatted GitHub flavored markdown
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleGenerateExport("html")}
+                className={`p-3.5 rounded-xl text-left border transition-all ${
+                  exportFormat === "html"
+                    ? "bg-indigo-950/40 border-indigo-500 text-white shadow-sm shadow-indigo-500/10"
+                    : "bg-studio-950/60 border-studio-800 text-studio-400 hover:border-studio-700 hover:text-studio-200"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-white">HTML5 (.html)</span>
+                  <Code className="w-4 h-4 text-indigo-400" />
+                </div>
+                <p className="text-[11px] text-studio-400">
+                  SEO meta headers, OpenGraph tags, and responsive typography
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleGenerateExport("json")}
+                className={`p-3.5 rounded-xl text-left border transition-all ${
+                  exportFormat === "json"
+                    ? "bg-indigo-950/40 border-indigo-500 text-white shadow-sm shadow-indigo-500/10"
+                    : "bg-studio-950/60 border-studio-800 text-studio-400 hover:border-studio-700 hover:text-studio-200"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-bold text-white">Headless CMS (.json)</span>
+                  <FileCheck className="w-4 h-4 text-indigo-400" />
+                </div>
+                <p className="text-[11px] text-studio-400">
+                  Structured payload for Strapi, Contentful, Ghost, or Sanity
+                </p>
+              </button>
+            </div>
+
+            {/* Export Options */}
+            <div className="flex flex-wrap items-center gap-4 p-3 bg-studio-950/60 rounded-xl border border-studio-800/80 text-xs text-studio-300">
+              {exportFormat === "markdown" && (
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={exportIncludeFrontmatter}
+                    onChange={(e) => {
+                      setExportIncludeFrontmatter(e.target.checked);
+                      handleGenerateExport("markdown");
+                    }}
+                    className="rounded border-studio-700 bg-studio-900 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>Include YAML Frontmatter</span>
+                </label>
+              )}
+
+              {exportFormat === "html" && (
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={exportStandaloneHtml}
+                    onChange={(e) => {
+                      setExportStandaloneHtml(e.target.checked);
+                      handleGenerateExport("html");
+                    }}
+                    className="rounded border-studio-700 bg-studio-900 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>Full HTML5 Document with Head & Styles</span>
+                </label>
+              )}
+
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={exportMarkStatus}
+                  onChange={(e) => setExportMarkStatus(e.target.checked)}
+                  className="rounded border-studio-700 bg-studio-900 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span>Update document workflow status to &quot;Exported&quot;</span>
+              </label>
+            </div>
+
+            {/* Live Output Code Preview */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-studio-200">
+                  Output Preview ({exportResult?.filename || "export"})
+                </span>
+                <span className="text-studio-500 font-mono text-[11px]">
+                  {exportResult?.metadata?.wordCount || wordCount} words • {exportResult?.mimeType}
+                </span>
+              </div>
+
+              <div className="relative">
+                <pre className="w-full max-h-64 overflow-auto p-4 bg-studio-950 rounded-xl border border-studio-800 text-[11px] font-mono text-studio-300 leading-relaxed">
+                  {isExporting ? "Generating formatted export..." : exportResult?.content || "No content formatted"}
+                </pre>
+              </div>
+            </div>
+
+            {/* Export History */}
+            {exportHistory.length > 0 && (
+              <div className="pt-2 border-t border-studio-800/80">
+                <p className="text-xs font-semibold text-studio-400 mb-2">
+                  Past Exports ({exportHistory.length})
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {exportHistory.slice(0, 5).map((rec) => (
+                    <span
+                      key={rec.id}
+                      className="px-2 py-1 rounded bg-studio-950 border border-studio-800 text-[10px] text-studio-400"
+                    >
+                      {rec.format.toUpperCase()} • {new Date(rec.createdAt).toLocaleDateString()}{" "}
+                      {new Date(rec.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Action Footer */}
+            <div className="flex items-center justify-between pt-4 border-t border-studio-800">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsExportModalOpen(false)}
+                className="border-studio-700 text-studio-300"
+              >
+                Close
+              </Button>
+
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={copyExportContent}
+                  disabled={!exportResult || isExporting}
+                  className="border-studio-700 text-studio-200"
+                >
+                  {isCopiedExport ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 mr-1.5 text-emerald-400" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 mr-1.5" />
+                      Copy Content
+                    </>
+                  )}
+                </Button>
+
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={downloadExportFile}
+                  disabled={!exportResult || isExporting}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white"
+                >
+                  <Download className="w-3.5 h-3.5 mr-1.5" />
+                  Download {exportFormat.toUpperCase()}
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
