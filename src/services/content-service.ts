@@ -1,6 +1,36 @@
 import crypto from "crypto";
-import { DbContentItem } from "@/db/schema";
+import { DbContentItem, DbContentVersion } from "@/db/schema";
 import { db } from "@/db/client";
+import { VersionService } from "@/services/version-service";
+
+export interface PublicBlogItem {
+  id: string;
+  title: string;
+  slug: string;
+  category: string;
+  excerpt: string;
+  status: string;
+  author: string;
+  readingTime: string;
+  publishDate: string;
+  thumb: string;
+  content?: string;
+  seoTitle?: string;
+  metaDescription?: string;
+  keywords?: string[];
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface PublicBlogListResult {
+  items: PublicBlogItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  categories: Array<{ name: string; count: number }>;
+  featuredPost?: PublicBlogItem | null;
+}
 
 // In-memory persistent database store for local development without live PostgreSQL
 const globalForContent = global as unknown as {
@@ -11,9 +41,55 @@ const memoryContent: Map<string, DbContentItem> =
   globalForContent.memoryContent || new Map<string, DbContentItem>();
 globalForContent.memoryContent = memoryContent;
 
-// Only seed once on initial process startup, never re-seed when user deletes items
+// Initialize initial demo articles if empty
 if (!globalForContent.hasInitialized) {
   globalForContent.hasInitialized = true;
+  if (memoryContent.size === 0) {
+    memoryContent.set("cnt_demo_blog_1", {
+      id: "cnt_demo_blog_1",
+      workspace_id: "ws_default_neno",
+      type: "blog",
+      title: "Building Resilient Agentic Workflows with Next.js 14 and Deep Reasoning",
+      slug: "building-resilient-agentic-workflows-nextjs-14",
+      status: "approved",
+      category: "AI Architecture",
+      excerpt: "In modern engineering landscapes, mastering autonomous agent pipelines has shifted from an exploratory advantage to a foundational architectural mandate. This blueprint provides a deep, production-grade analysis.",
+      current_version_id: "ver_demo_blog_1",
+      created_by: "usr_default_mit",
+      created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+      updated_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+    });
+
+    memoryContent.set("cnt_demo_blog_2", {
+      id: "cnt_demo_blog_2",
+      workspace_id: "ws_default_neno",
+      type: "blog",
+      title: "Event-Driven Microfrontends: Real-World Latency Benchmarks and ROI",
+      slug: "event-driven-microfrontends-real-world-latency-benchmarks-roi",
+      status: "approved",
+      category: "Frontend & Architecture",
+      excerpt: "Quantifying sub-50ms latency gains, module federation strategies, and enterprise ROI across distributed engineering teams.",
+      current_version_id: "ver_demo_blog_2",
+      created_by: "usr_default_mit",
+      created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+    });
+
+    memoryContent.set("cnt_demo_blog_3", {
+      id: "cnt_demo_blog_3",
+      workspace_id: "ws_default_neno",
+      type: "blog",
+      title: "Designing Zero-Trust Architecture for Microservices in Kubernetes",
+      slug: "designing-zero-trust-architecture-for-microservices-in-kubernetes",
+      status: "approved",
+      category: "Cloud & Kubernetes",
+      excerpt: "A comprehensive guide to implementing identity-driven service meshes, mTLS, and eBPF kernel telemetry without performance degradation.",
+      current_version_id: "ver_demo_blog_3",
+      created_by: "usr_default_mit",
+      created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      updated_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+    });
+  }
 }
 
 import { generateSlug } from "@/lib/utils";
@@ -95,6 +171,185 @@ export class ContentService {
     }
 
     return items.sort((a, b) => b.updated_at.getTime() - a.updated_at.getTime());
+  }
+
+  /**
+   * Public Query: Retrieve ONLY published, non-deleted blogs for /blog-with-sidebar
+   */
+  static async listPublicBlogs(options?: {
+    search?: string;
+    category?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+  }): Promise<PublicBlogListResult> {
+    const page = Math.max(1, options?.page || 1);
+    const limit = Math.max(1, Math.min(50, options?.limit || 6));
+    const offset = (page - 1) * limit;
+
+    let rawItems: DbContentItem[] = [];
+
+    if (db.isConfigured) {
+      let query = `
+        SELECT * FROM content_items 
+        WHERE type = 'blog' 
+          AND (status = 'approved' OR status = 'exported') 
+          AND deleted_at IS NULL
+      `;
+      const params: unknown[] = [];
+
+      if (options?.category && options.category.toLowerCase() !== "all") {
+        params.push(`%${options.category}%`);
+        query += ` AND category ILIKE $${params.length}`;
+      }
+
+      if (options?.search) {
+        params.push(`%${options.search}%`);
+        query += ` AND (title ILIKE $${params.length} OR excerpt ILIKE $${params.length} OR category ILIKE $${params.length})`;
+      }
+
+      query += " ORDER BY updated_at DESC";
+
+      const res = await db.query<DbContentItem>(query, params);
+      rawItems = res.rows;
+    } else {
+      rawItems = Array.from(memoryContent.values()).filter(
+        (c) =>
+          c.type === "blog" &&
+          (c.status === "approved" || c.status === "exported") &&
+          !c.deleted_at
+      );
+
+      if (options?.category && options.category.toLowerCase() !== "all") {
+        const cat = options.category.toLowerCase();
+        rawItems = rawItems.filter((c) => c.category.toLowerCase().includes(cat));
+      }
+
+      if (options?.search) {
+        const q = options.search.toLowerCase();
+        rawItems = rawItems.filter(
+          (c) =>
+            c.title.toLowerCase().includes(q) ||
+            c.excerpt?.toLowerCase().includes(q) ||
+            c.category.toLowerCase().includes(q)
+        );
+      }
+
+      rawItems.sort((a, b) => b.updated_at.getTime() - a.updated_at.getTime());
+    }
+
+    // Compute dynamic category counts across ALL published non-deleted blogs
+    const allPublished = db.isConfigured
+      ? (await db.query<DbContentItem>("SELECT category FROM content_items WHERE type = 'blog' AND (status = 'approved' OR status = 'exported') AND deleted_at IS NULL")).rows
+      : Array.from(memoryContent.values()).filter((c) => c.type === "blog" && (c.status === "approved" || c.status === "exported") && !c.deleted_at);
+
+    const categoryMap: Record<string, number> = {};
+    for (const b of allPublished) {
+      const cat = b.category || "AI Architecture";
+      categoryMap[cat] = (categoryMap[cat] || 0) + 1;
+    }
+    const categories = Object.entries(categoryMap).map(([name, count]) => ({ name, count }));
+
+    const total = rawItems.length;
+    const totalPages = Math.ceil(total / limit) || 1;
+    const paginated = rawItems.slice(offset, offset + limit);
+
+    // Format items with version SEO metadata
+    const items: PublicBlogItem[] = await Promise.all(
+      paginated.map(async (item) => {
+        const version = await VersionService.getLatest(item.id);
+        const seo = (version?.seo_metadata || {}) as Record<string, unknown>;
+        const thumb =
+          (seo.featuredImageBrief as string) ||
+          (seo.ogImage as string) ||
+          (seo.thumb as string) ||
+          "";
+
+        return {
+          id: item.id,
+          title: item.title,
+          slug: item.slug,
+          category: item.category || "AI Architecture",
+          excerpt: item.excerpt || "In-depth engineering insights and architectural specifications.",
+          status: item.status,
+          author: (seo.author as string) || "Mit Patel",
+          readingTime: (seo.readingTime as string) || "5 min read",
+          publishDate: (seo.publishDate as string) || new Date(item.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+          thumb,
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+        };
+      })
+    );
+
+    const featuredPost = items.length > 0 && page === 1 ? items[0] : null;
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages,
+      categories,
+      featuredPost,
+    };
+  }
+
+  /**
+   * Public Query: Retrieve a single published, non-deleted blog by slug or ID
+   */
+  static async getPublicBlogBySlugOrId(slugOrId: string): Promise<PublicBlogItem | null> {
+    let dbItem: DbContentItem | null = null;
+
+    if (db.isConfigured) {
+      const query = `
+        SELECT * FROM content_items 
+        WHERE (slug = $1 OR id = $1)
+          AND type = 'blog'
+          AND (status = 'approved' OR status = 'exported')
+          AND deleted_at IS NULL
+        LIMIT 1
+      `;
+      const res = await db.query<DbContentItem>(query, [slugOrId]);
+      dbItem = res.rows[0] || null;
+    } else {
+      const all = Array.from(memoryContent.values()).filter(
+        (c) =>
+          c.type === "blog" &&
+          (c.status === "approved" || c.status === "exported") &&
+          !c.deleted_at
+      );
+      dbItem = all.find((c) => c.slug === slugOrId || c.id === slugOrId) || null;
+    }
+
+    if (!dbItem) return null;
+
+    const version = await VersionService.getLatest(dbItem.id);
+    const seo = (version?.seo_metadata || {}) as Record<string, unknown>;
+    const thumb =
+      (seo.featuredImageBrief as string) ||
+      (seo.ogImage as string) ||
+      (seo.thumb as string) ||
+      "";
+
+    return {
+      id: dbItem.id,
+      title: dbItem.title,
+      slug: dbItem.slug,
+      category: dbItem.category || "AI Architecture",
+      excerpt: dbItem.excerpt || "",
+      status: dbItem.status,
+      author: (seo.author as string) || "Mit Patel",
+      readingTime: (seo.readingTime as string) || "5 min read",
+      publishDate: (seo.publishDate as string) || new Date(dbItem.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      thumb,
+      content: version?.content || "",
+      seoTitle: (seo.seoTitle as string) || dbItem.title,
+      metaDescription: (seo.metaDescription as string) || dbItem.excerpt || "",
+      keywords: Array.isArray(seo.keywords) ? (seo.keywords as string[]) : [],
+      created_at: dbItem.created_at,
+      updated_at: dbItem.updated_at,
+    };
   }
 
   static async getById(

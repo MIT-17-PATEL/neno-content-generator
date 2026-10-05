@@ -8,15 +8,15 @@ import { Header } from "@/components/layout/header";
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isAuthPage = pathname.startsWith("/auth");
+  const isPublicPage =
+    pathname === "/blog-with-sidebar" ||
+    pathname.startsWith("/blog-with-sidebar/") ||
+    (pathname.startsWith("/blog/") &&
+      !pathname.endsWith("/edit") &&
+      !pathname.startsWith("/blog/create"));
 
-  if (isAuthPage) {
-    return (
-      <div className="min-h-screen w-full flex flex-col justify-center items-center bg-slate-50 relative">
-        <div className="w-full z-10 py-12 flex justify-center items-center px-4">
-          {children}
-        </div>
-      </div>
-    );
+  if (isAuthPage || isPublicPage) {
+    return <>{children}</>;
   }
 
   return (

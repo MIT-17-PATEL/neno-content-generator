@@ -133,6 +133,14 @@ export async function POST(req: NextRequest) {
       await WebsiteSyncService.publishBlog(itemFormatted, versionFormatted, workspaceId, body.author || auth.user.name);
     }
 
+    // Revalidate Next.js cache for public blog pages
+    try {
+      const { revalidateBlogCache } = await import("@/lib/cache/revalidate");
+      await revalidateBlogCache(item.slug);
+    } catch (e) {
+      console.warn("Revalidation warning:", e);
+    }
+
     return NextResponse.json({
       success: true,
       item,

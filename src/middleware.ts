@@ -1,7 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, RateLimitType } from "@/lib/security/rate-limiter";
 
-const PUBLIC_PATHS = ["/auth/signin", "/auth/signup", "/_next", "/favicon.ico", "/api/auth/signin", "/api/auth/signup"];
+const PUBLIC_PATHS = [
+  "/auth/signin",
+  "/auth/signup",
+  "/_next",
+  "/favicon.ico",
+  "/api/auth/signin",
+  "/api/auth/signup",
+  "/api/blogs",
+  "/blog-with-sidebar",
+  "/uploads",
+];
+
+function isPublicRequestPath(pathname: string): boolean {
+  if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p))) {
+    return true;
+  }
+  // Public blog reader /blog/[slug] (exclude admin CMS pages /blog, /blog/create, /blog/[id]/edit)
+  if (
+    pathname.startsWith("/blog/") &&
+    !pathname.startsWith("/blog/create") &&
+    !pathname.endsWith("/edit")
+  ) {
+    return true;
+  }
+  return false;
+}
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -51,7 +76,7 @@ export function middleware(req: NextRequest) {
   }
 
   // 2. Auth Session Guard for Protected Dashboard Pages
-  const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p));
+  const isPublic = isPublicRequestPath(pathname);
   const sessionToken = req.cookies.get("ai_studio_session")?.value;
 
   if (!isPublic && !sessionToken && !pathname.startsWith("/api")) {

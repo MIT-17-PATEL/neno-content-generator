@@ -117,6 +117,14 @@ export async function PUT(
       await WebsiteSyncService.publishBlog(itemFormatted, versionFormatted, workspaceId, body.author || auth.user.name);
     }
 
+    // Revalidate Next.js cache for public blog pages
+    try {
+      const { revalidateBlogCache } = await import("@/lib/cache/revalidate");
+      await revalidateBlogCache(updatedItem?.slug || existing.slug);
+    } catch (e) {
+      console.warn("Revalidation warning:", e);
+    }
+
     return NextResponse.json({
       success: true,
       item: updatedItem,
@@ -152,6 +160,14 @@ export async function DELETE(
 
   // 2. Soft-delete locally into Trash (7-day recovery period)
   await ContentService.softDelete(workspaceId, params.id, auth.user.userId);
+
+  // 3. Invalidate public blog cache
+  try {
+    const { revalidateBlogCache } = await import("@/lib/cache/revalidate");
+    await revalidateBlogCache(item.slug);
+  } catch (e) {
+    console.warn("Revalidation warning:", e);
+  }
 
   return NextResponse.json({
     success: true,

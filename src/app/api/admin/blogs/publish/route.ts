@@ -65,6 +65,13 @@ export async function POST(req: NextRequest) {
 
       const syncResult = await WebsiteSyncService.publishBlog(item, version, workspaceId, auth.user.name);
       results.push({ id, title: item.title, ...syncResult });
+
+      try {
+        const { revalidateBlogCache } = await import("@/lib/cache/revalidate");
+        await revalidateBlogCache(item.slug);
+      } catch (e) {
+        console.warn("Revalidation warning:", e);
+      }
     }
 
     return NextResponse.json({

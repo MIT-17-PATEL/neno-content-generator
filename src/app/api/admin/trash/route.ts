@@ -76,6 +76,12 @@ export async function POST(req: NextRequest) {
 
     if (action === "empty" || action === "empty-all") {
       const count = await ContentService.emptyTrash(workspaceId);
+      try {
+        const { revalidateBlogCache } = await import("@/lib/cache/revalidate");
+        await revalidateBlogCache();
+      } catch (e) {
+        console.warn("Revalidation warning:", e);
+      }
       return NextResponse.json({
         success: true,
         message: `Permanently removed ${count} item(s) from Trash`,
@@ -133,6 +139,13 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      try {
+        const { revalidateBlogCache } = await import("@/lib/cache/revalidate");
+        await revalidateBlogCache();
+      } catch (e) {
+        console.warn("Revalidation warning:", e);
+      }
+
       return NextResponse.json({
         success: true,
         message: `Restored ${restoredCount} item(s) successfully`,
@@ -147,6 +160,13 @@ export async function POST(req: NextRequest) {
       for (const id of ids) {
         const ok = await ContentService.permanentDelete(workspaceId, id);
         if (ok) deletedCount++;
+      }
+
+      try {
+        const { revalidateBlogCache } = await import("@/lib/cache/revalidate");
+        await revalidateBlogCache();
+      } catch (e) {
+        console.warn("Revalidation warning:", e);
       }
 
       return NextResponse.json({
