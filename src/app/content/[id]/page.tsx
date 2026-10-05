@@ -24,6 +24,7 @@ import {
   ExternalLink,
   Bot,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/auth-context";
 import { Button } from "@/components/ui/button";
@@ -426,24 +427,54 @@ export default function ContentDetailPage() {
         body: JSON.stringify({ workspaceId: activeWorkspace.id }),
       });
       const data = await res.json();
-      if (res.ok) {
-        if (data.publishedToWebsite) {
-          setPublishWebsiteSuccess(`Published directly to Neno Website API (${data.endpointUsed})! Live link: ${data.websiteUrl}`);
-        } else {
-          setPublishWebsiteSuccess(`Payload formatted & approved! Export JSON copied or ready for http://localhost:3000.`);
-        }
+      if (res.ok && data.publishedToWebsite) {
+        setPublishWebsiteSuccess(`Published directly to Neno Website API! Live URL: ${data.websiteUrl}`);
         if (item) setItem({ ...item, status: "approved" });
+      } else if (res.ok && !data.publishedToWebsite) {
+        setPublishWebsiteError(data.errorDetail || "Could not publish to Neno Website. Ensure website is running on port 3000 with admin credentials.");
       } else {
         setPublishWebsiteError(data.error || "Failed to publish to website");
       }
-    } catch {
-      setPublishWebsiteError("Could not reach website server at http://localhost:3000");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not reach website server";
+      setPublishWebsiteError(`Error connecting to publishing service: ${msg}`);
     } finally {
       setIsPublishingToWebsite(false);
       setTimeout(() => {
         setPublishWebsiteSuccess(null);
         setPublishWebsiteError(null);
-      }, 7000);
+      }, 10000);
+    }
+  };
+
+  const [isDeletingDocument, setIsDeletingDocument] = useState(false);
+
+  const handleDeleteDocument = async () => {
+    if (!activeWorkspace || !contentId) return;
+    if (
+      !confirm(
+        `Are you sure you want to delete "${item?.title || "this document"}"?\n\nThis will remove it from the studio and also delete it from your website if published.`
+      )
+    ) {
+      return;
+    }
+
+    setIsDeletingDocument(true);
+    try {
+      const res = await fetch(`/api/content/${contentId}?workspaceId=${activeWorkspace.id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        router.push("/content");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Failed to delete document");
+        setIsDeletingDocument(false);
+      }
+    } catch (err) {
+      console.error("Delete error:", err);
+      alert("Error deleting document");
+      setIsDeletingDocument(false);
     }
   };
 
@@ -613,6 +644,22 @@ export default function ContentDetailPage() {
           >
             <Save className="h-3.5 w-3.5" />
             <span>Save</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDeleteDocument}
+            disabled={isDeletingDocument}
+            className="gap-1.5 text-xs h-8 font-medium border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300"
+            title="Delete document and remove from website"
+          >
+            {isDeletingDocument ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5" />
+            )}
+            <span>Delete</span>
           </Button>
         </div>
       </div>

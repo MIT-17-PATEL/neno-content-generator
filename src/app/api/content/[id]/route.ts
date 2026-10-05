@@ -107,10 +107,75 @@ export async function DELETE(
   const auth = await requireWorkspaceAccess(req, workspaceId);
   if ("error" in auth) return auth.error;
 
+  const item = await ContentService.getById(workspaceId, params.id);
+  if (!item) {
+    return NextResponse.json({ error: "Content item not found" }, { status: 404 });
+  }
+
+  // 1. Synchronize Deletion with Neno Tech Website (DELETE /api/admin/blogs/[id])
+  const websiteBaseUrl = (
+    process.env.NENO_WEBSITE_URL ||
+    process.env.NENO_WEBSITE_API_URL ||
+    "http://localhost:3000"
+  ).replace(/\/+$/, "").replace(/\/api\/admin\/blogs$/, "").replace(/\/api\/blogs$/, "");
+
+  const adminEmail = process.env.NENO_WEBSITE_ADMIN_EMAIL || "admin@neno.tech";
+  const adminPassword = process.env.NENO_WEBSITE_ADMIN_PASSWORD || "admin123";
+  let sessionCookie = process.env.NENO_ADMIN_SESSION || "";
+
+  if (!sessionCookie) {
+    try {
+      const authRes = await fetch(`${websiteBaseUrl}/api/admin/auth`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: adminEmail, password: adminPassword }),
+      });
+      if (authRes.ok) {
+        const setCookieHeader = authRes.headers.get("set-cookie");
+        if (setCookieHeader) {
+          const match = setCookieHeader.match(/neno-admin-session=([^;]+)/);
+          sessionCookie = match ? `neno-admin-session=${match[1]}` : setCookieHeader.split(";")[0];
+        }
+      }
+    } catch {
+      // Ignore website auth errors if website is temporarily offline
+    }
+  }
+
+  // Attempt delete on target website by slug and by id
+  const headers: Record<string, string> = {};
+  if (sessionCookie) headers["Cookie"] = sessionCookie;
+
+  const deleteEndpoints = [
+    item.slug ? `${websiteBaseUrl}/api/admin/blogs/${encodeURIComponent(item.slug)}` : null,
+    item.id ? `${websiteBaseUrl}/api/admin/blogs/${encodeURIComponent(item.id)}` : null,
+  ].filter(Boolean) as string[];
+
+  let deletedFromWebsite = false;
+  for (const url of deleteEndpoints) {
+    try {
+      const res = await fetch(url, {
+        method: "DELETE",
+        headers,
+      });
+      if (res.ok) {
+        deletedFromWebsite = true;
+        break;
+      }
+    } catch {
+      // Continue to next endpoint
+    }
+  }
+
+  // 2. Delete locally from Content Studio
   const deleted = await ContentService.delete(workspaceId, params.id);
   if (!deleted) {
     return NextResponse.json({ error: "Content item not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ success: true, message: "Content item deleted" });
+  return NextResponse.json({
+    success: true,
+    message: "Content item deleted",
+    deletedFromWebsite,
+  });
 }

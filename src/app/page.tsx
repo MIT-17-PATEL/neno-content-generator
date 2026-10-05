@@ -11,6 +11,8 @@ import {
   Layers,
   Plus,
   Eye,
+  Trash2,
+  Loader2,
   ExternalLink,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/auth-context";
@@ -37,6 +39,7 @@ export default function DashboardPage() {
   });
   const [recentItems, setRecentItems] = useState<ContentItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchDashboardData = useCallback(async () => {
     if (!activeWorkspace) return;
@@ -58,6 +61,36 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
+
+  const handleDelete = async (id: string, title: string) => {
+    if (!activeWorkspace) return;
+    if (
+      !confirm(
+        `Are you sure you want to delete "${title}"?\n\nThis will remove it from the studio and also delete it from your website if published.`
+      )
+    ) {
+      return;
+    }
+
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/content/${id}?workspaceId=${activeWorkspace.id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setRecentItems((prev) => prev.filter((item) => item.id !== id));
+        fetchDashboardData();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Failed to delete document");
+      }
+    } catch (err) {
+      console.error("Delete error:", err);
+      alert("Error deleting document");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -293,11 +326,27 @@ export default function DashboardPage() {
                       {new Date(item.updatedAt || Date.now()).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Link href={`/content/${item.id}`}>
-                        <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
-                          <Eye className="h-3.5 w-3.5" />
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Link href={`/content/${item.id}`}>
+                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" title="Open document">
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
+                        </Link>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={deletingId === item.id}
+                          onClick={() => handleDelete(item.id, item.title)}
+                          className="h-7 px-2 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                          title="Delete document and remove from website"
+                        >
+                          {deletingId === item.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
                         </Button>
-                      </Link>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

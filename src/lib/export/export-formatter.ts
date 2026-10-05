@@ -76,7 +76,7 @@ export class ExportFormatter {
     const day = String(dateObj.getDate()).padStart(2, "0");
     const month = String(dateObj.getMonth() + 1).padStart(2, "0");
     const year = dateObj.getFullYear();
-    const formattedPublishDate = `${day}:${month}:${year}`;
+    const formattedPublishDate = `${year}-${month}-${day}`;
 
     const frontmatter = `---
 title: "${item.title.replace(/"/g, '\\"')}"
@@ -105,7 +105,74 @@ ${keywords.map((kw) => `    - "${kw}"`).join("\n")}
     return frontmatter + version.content.trim();
   }
 
-  private static markdownToHtmlBody(markdown: string): string {
+  public static cleanCategoryName(rawCategory?: string): string {
+    if (!rawCategory) return "AI Architecture";
+    const trimmed = rawCategory.trim();
+    const parts = trimmed.split(/[,|/•]/).map((s) => s.trim()).filter(Boolean);
+    if (parts.length > 0 && parts[0].length > 0) {
+      const first = parts[0];
+      if (first === first.toUpperCase() && first.length > 3) {
+        return first
+          .toLowerCase()
+          .replace(/\b\w/g, (char) => char.toUpperCase())
+          .replace(/\bAi\b/g, "AI")
+          .replace(/\bMl\b/g, "ML");
+      }
+      return first;
+    }
+    return trimmed;
+  }
+
+  public static formatCleanArticleMarkdown(rawContent: string, title?: string): string {
+    let clean = (rawContent || "").trim();
+
+    // 1. Strip raw HTML tags if any were embedded, converting them to clean markdown
+    clean = clean
+      .replace(/<h1[^>]*>(.*?)<\/h1>/gi, "") // strip H1 (redundant with hero title)
+      .replace(/<h2[^>]*>(.*?)<\/h2>/gi, "\n\n## $1\n\n")
+      .replace(/<h3[^>]*>(.*?)<\/h3>/gi, "\n\n### $1\n\n")
+      .replace(/<h4[^>]*>(.*?)<\/h4>/gi, "\n\n#### $1\n\n")
+      .replace(/<strong>(.*?)<\/strong>/gi, "**$1**")
+      .replace(/<b>(.*?)<\/b>/gi, "**$1**")
+      .replace(/<em>(.*?)<\/em>/gi, "*$1*")
+      .replace(/<i>(.*?)<\/i>/gi, "*$1*")
+      .replace(/<code[^>]*>(.*?)<\/code>/gi, "`$1`")
+      .replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gis, (_, quote) => `\n\n> ${quote.replace(/<p>/gi, "").replace(/<\/p>/gi, "\n> ").trim()}\n\n`)
+      .replace(/<li[^>]*>(.*?)<\/li>/gi, "- $1\n")
+      .replace(/<\/?ul[^>]*>/gi, "\n")
+      .replace(/<\/?ol[^>]*>/gi, "\n")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<p[^>]*>/gi, "\n\n")
+      .replace(/<\/p>/gi, "\n\n")
+      .replace(/<div[^>]*>/gi, "\n")
+      .replace(/<\/div>/gi, "\n");
+
+    // 2. Remove any remaining stray HTML tags
+    clean = clean.replace(/<[^>]+>/g, "");
+
+    // 3. Remove leading duplicated Title (e.g., # Title)
+    clean = clean.replace(/^#\s+[^\n]+\n+/, "");
+    if (title) {
+      const normalizedTitle = title.trim().toLowerCase();
+      const lines = clean.split("\n");
+      if (lines.length > 0 && lines[0].trim().toLowerCase() === normalizedTitle) {
+        clean = lines.slice(1).join("\n").trim();
+      }
+    }
+
+    // 4. Normalize lists and sub-items
+    clean = clean.replace(/([^\n])\n(-|\*|\d+\.) /g, "$1\n\n$2 ");
+
+    // 5. Ensure proper heading spacing
+    clean = clean.replace(/\n*(#{2,4}\s+[^\n]+)\n*/g, "\n\n$1\n\n");
+
+    // 6. Normalize multiple consecutive blank lines
+    clean = clean.replace(/\n{3,}/g, "\n\n").trim();
+
+    return clean;
+  }
+
+  public static markdownToHtmlBody(markdown: string): string {
     let html = markdown;
 
     // Escape HTML special chars inside code blocks first
@@ -202,7 +269,7 @@ ${keywords.map((kw) => `    - "${kw}"`).join("\n")}
     const bodyHtml = this.markdownToHtmlBody(version.content);
 
     if (!standaloneHtml) {
-      return `<article class="ai-content-studio-document">\n${bodyHtml}\n</article>`;
+      return `<article class="ai-content-studio-document blog-content-bold">\n${bodyHtml}\n</article>`;
     }
 
     const title = version.seoMetadata?.seoTitle || item.title;
@@ -218,17 +285,17 @@ ${keywords.map((kw) => `    - "${kw}"`).join("\n")}
   <meta name="description" content="${description}" />
   <meta name="keywords" content="${keywords}" />
   <meta name="author" content="${brandName}" />
-  
+
   <!-- Open Graph -->
   <meta property="og:title" content="${title}" />
   <meta property="og:description" content="${description}" />
   <meta property="og:type" content="article" />
-  
+
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${title}" />
   <meta name="twitter:description" content="${description}" />
-  
+
   <style>
     :root {
       --bg-color: #0b0f17;
@@ -326,6 +393,19 @@ ${keywords.map((kw) => `    - "${kw}"`).join("\n")}
       font-size: 0.85rem;
       color: var(--text-muted);
     }
+    .blog-content-bold {
+      font-weight: 700;
+    }
+    .blog-content-bold h1,
+    .blog-content-bold h2,
+    .blog-content-bold h3,
+    .blog-content-bold p,
+    .blog-content-bold li,
+    .blog-content-bold blockquote,
+    .blog-content-bold td,
+    .blog-content-bold th {
+      font-weight: 700;
+    }
   </style>
 </head>
 <body>
@@ -338,7 +418,7 @@ ${keywords.map((kw) => `    - "${kw}"`).join("\n")}
     </div>
     
     <main>
-      ${bodyHtml}
+      <div class="blog-content-bold">${bodyHtml}</div>
     </main>
   </div>
 </body>
@@ -356,9 +436,10 @@ ${keywords.map((kw) => `    - "${kw}"`).join("\n")}
     const day = String(dateObj.getDate()).padStart(2, "0");
     const month = String(dateObj.getMonth() + 1).padStart(2, "0");
     const year = dateObj.getFullYear();
-    const formattedPublishDate = `${day}:${month}:${year}`;
+    const formattedPublishDate = `${year}-${month}-${day}`;
 
     const isCaseStudy = item.type === "case-study";
+    const renderedHtml = this.markdownToHtmlBody(version.content);
 
     const payload = {
       // 1:1 Website Form Compatible Schema (Blog & Case Study)
@@ -368,6 +449,13 @@ ${keywords.map((kw) => `    - "${kw}"`).join("\n")}
       author: authorName,
       publishDate: formattedPublishDate,
       status: item.status === "approved" || item.status === "exported" ? "Published" : "Draft",
+      shortDescription: item.excerpt || "",
+      content: renderedHtml,
+      readingTime: `${readingTimeMinutes} min read`,
+      thumb: version.seoMetadata?.featuredImageBrief || "",
+      thumbFull: version.seoMetadata?.featuredImageBrief || "",
+      buttonText: "Read Article",
+      buttonLink: `/blog-single/${item.slug}`,
 
       // Case Study specific website fields
       ...(isCaseStudy
@@ -388,21 +476,17 @@ ${keywords.map((kw) => `    - "${kw}"`).join("\n")}
           }
         : {
             // Blog specific website fields
-            readingTime: `${readingTimeMinutes} min read`,
             featuredImage: version.seoMetadata?.featuredImageBrief || "",
-            shortDescription: item.excerpt || "",
             blogContent: version.content,
-            buttonText: "Read article",
-            buttonLink: `/blog-single/${item.slug}`,
           }),
 
       // Extended metadata & Headless CMS contract
       schema_version: "2.0",
       id: item.id,
       type: item.type,
-      content: {
+      content_formats: {
         raw_markdown: version.content,
-        html_rendered: this.markdownToHtmlBody(version.content),
+        html_rendered: renderedHtml,
       },
       seo: {
         seo_title: version.seoMetadata?.seoTitle || item.title,
