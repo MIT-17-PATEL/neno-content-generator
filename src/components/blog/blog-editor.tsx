@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/dialog";
 import { generateSlug } from "@/lib/utils";
 import { ExportFormatter } from "@/lib/export/export-formatter";
+import { BlogReader } from "@/components/blog/blog-reader";
 
 interface BlogEditorProps {
   initialId?: string;
@@ -910,34 +911,30 @@ export function BlogEditor({ initialId }: BlogEditorProps) {
         </TabsContent>
       </Tabs>
 
-      {/* Live Preview Modal */}
+      {/* Live Preview Modal (Exact 1:1 Rendering with Website Blog Reader) */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-900">
-              Live Article Preview
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 pt-2">
-            <div className="border-b border-slate-200 pb-4">
-              <span className="text-xs font-bold uppercase tracking-wider text-orange-600">
-                {category}
-              </span>
-              <h1 className="text-2xl font-bold text-slate-900 mt-1">{title || "Untitled Article"}</h1>
-              <p className="text-xs text-slate-500 mt-1">
-                By {author} • {publishDate}
-              </p>
-              {shortDescription && (
-                <p className="text-sm text-slate-600 mt-3 font-medium bg-slate-50 p-3 rounded border border-slate-200">
-                  {shortDescription}
-                </p>
-              )}
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-0 border-slate-800 bg-[#0a0d14] text-slate-100">
+          <div className="sticky top-0 z-20 flex items-center justify-between px-6 py-3 bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <DialogTitle className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                Live Publication Preview
+              </DialogTitle>
             </div>
+            <span className="text-[11px] font-mono text-slate-500">
+              1:1 Website Layout
+            </span>
+          </div>
 
-            <div
-              className="prose prose-sm max-w-none text-slate-800 text-xs leading-relaxed space-y-3"
-              dangerouslySetInnerHTML={{ __html: renderedHtml }}
+          <div className="p-2 sm:p-6">
+            <BlogReader
+              title={title || "Untitled Article"}
+              category={category}
+              author={author}
+              publishDate={publishDate}
+              shortDescription={shortDescription}
+              featuredImage={featuredImage}
+              content={content}
             />
           </div>
         </DialogContent>

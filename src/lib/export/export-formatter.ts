@@ -128,6 +128,8 @@ ${keywords.map((kw) => `    - "${kw}"`).join("\n")}
 
     // 1. Strip raw HTML tags if any were embedded, converting them to clean markdown
     clean = clean
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
       .replace(/<h1[^>]*>(.*?)<\/h1>/gi, "") // strip H1 (redundant with hero title)
       .replace(/<h2[^>]*>(.*?)<\/h2>/gi, "\n\n## $1\n\n")
       .replace(/<h3[^>]*>(.*?)<\/h3>/gi, "\n\n### $1\n\n")
@@ -147,10 +149,17 @@ ${keywords.map((kw) => `    - "${kw}"`).join("\n")}
       .replace(/<div[^>]*>/gi, "\n")
       .replace(/<\/div>/gi, "\n");
 
-    // 2. Remove any remaining stray HTML tags
+    // 2. Remove any remaining stray unsafe HTML tags
     clean = clean.replace(/<[^>]+>/g, "");
 
-    // 3. Remove leading duplicated Title (e.g., # Title)
+    // 3. Strip any leading markdown images at the very beginning of the article (since the hero banner handles the featured image)
+    clean = clean.replace(/^\s*!\[[^\]]*\]\([^\)]+\)\s*/i, "");
+    clean = clean.replace(/^\s*-\s*!\[[^\]]*\]\([^\)]+\)\s*/i, "");
+
+    // 4. Remove any raw data:image/svg+xml or data:image/png lines that were dumped into text
+    clean = clean.replace(/^.*data:image\/[a-zA-Z0-9+]+;[^\n]*$/gm, "");
+
+    // 5. Remove leading duplicated Title (e.g., # Title)
     clean = clean.replace(/^#\s+[^\n]+\n+/, "");
     if (title) {
       const normalizedTitle = title.trim().toLowerCase();
@@ -160,22 +169,39 @@ ${keywords.map((kw) => `    - "${kw}"`).join("\n")}
       }
     }
 
-    // 4. Normalize lists and sub-items
+    // 6. Normalize list items
     clean = clean.replace(/([^\n])\n(-|\*|\d+\.) /g, "$1\n\n$2 ");
 
-    // 5. Ensure proper heading spacing
+    // 7. Ensure proper heading spacing
     clean = clean.replace(/\n*(#{2,4}\s+[^\n]+)\n*/g, "\n\n$1\n\n");
 
-    // 6. Normalize multiple consecutive blank lines
+    // 8. Normalize multiple consecutive blank lines
     clean = clean.replace(/\n{3,}/g, "\n\n").trim();
 
     return clean;
   }
 
+  public static sanitizeHtml(input: string): string {
+    return input
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+      .replace(/javascript\s*:/gi, "blocked:")
+      .replace(/on\w+\s*=\s*(['"]).*?\1/gi, "");
+  }
+
   public static markdownToHtmlBody(markdown: string): string {
+    if (!markdown) return "";
+
     let html = markdown;
 
-    // Escape HTML special chars inside code blocks first
+    // 1. Strip raw dangerous data URI lines if they appear as naked text
+    html = html.replace(/data:image\/(?:svg\+xml|png|jpeg|webp);[a-zA-Z0-9+,;%=\-_~./\s]+/gi, (match) => {
+      // If within markdown image or src, leave alone if under 2000 chars, otherwise remove naked data strings
+      if (match.length > 300) return "";
+      return match;
+    });
+
+    // 2. Escape HTML special chars inside code blocks first
     const codeBlocks: string[] = [];
     html = html.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (_, lang, code) => {
       const escapedCode = code
@@ -184,52 +210,88 @@ ${keywords.map((kw) => `    - "${kw}"`).join("\n")}
         .replace(/>/g, "&gt;");
       const placeholder = `___CODE_BLOCK_${codeBlocks.length}___`;
       codeBlocks.push(
-        `<pre><code class="language-${lang || "text"}">${escapedCode.trim()}</code></pre>`
+        `<pre class="editorial-code-block my-6 overflow-x-auto rounded-xl bg-slate-950 p-4 border border-slate-800 text-slate-100 font-mono text-xs leading-relaxed"><code class="language-${lang || "text"}">${escapedCode.trim()}</code></pre>`
       );
       return placeholder;
     });
 
-    // Inline code
-    html = html.replace(/`([^`]+)`/g, (_, code) => {
+    // 3. Inline code
+    html = html.replace(/`([^`\n]+)`/g, (_, code) => {
       const escaped = code
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
-      return `<code>${escaped}</code>`;
+      return `<code class="px-1.5 py-0.5 rounded bg-slate-800 text-orange-400 font-mono text-[0.9em] border border-slate-700/60">${escaped}</code>`;
     });
 
-    // Headers
-    html = html.replace(/^### (.*$)/gim, (_, text) => `<h3>${text.trim()}</h3>`);
-    html = html.replace(/^## (.*$)/gim, (_, text) => `<h2>${text.trim()}</h2>`);
-    html = html.replace(/^# (.*$)/gim, (_, text) => `<h1>${text.trim()}</h1>`);
+    // 4. Markdown Images: ![alt](url) -> Semantic figure tag
+    html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
+      const trimmedUrl = url.trim();
+      // If data URI is overly huge, suppress or render clean placeholder
+      if (trimmedUrl.startsWith("data:") && trimmedUrl.length > 1000) {
+        return `<figure class="my-6 rounded-xl overflow-hidden border border-slate-800 bg-slate-900/50 p-4 text-center text-xs text-slate-400">
+          <div class="font-semibold text-slate-300 mb-1">${alt || "Technical Architecture Diagram"}</div>
+          <span class="text-[11px] text-slate-500">Asset rendered in high-resolution vector format</span>
+        </figure>`;
+      }
+      return `<figure class="my-8 text-center">
+        <img src="${trimmedUrl}" alt="${alt || "Article Visual"}" class="w-full max-h-[480px] object-cover rounded-xl border border-slate-800/80 shadow-md mx-auto" loading="lazy" />
+        ${alt ? `<figcaption class="text-xs text-slate-400 mt-2 italic">${alt}</figcaption>` : ""}
+      </figure>`;
+    });
 
-    // Bold & Italics
-    html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-    html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+    // 5. Markdown Links: [text](url)
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, url) => {
+      const safeUrl = url.trim().replace(/^javascript:/i, "");
+      return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="text-orange-500 hover:text-orange-400 underline underline-offset-4 decoration-orange-500/40 hover:decoration-orange-400 transition-colors font-medium">${text}</a>`;
+    });
 
-    // Blockquotes
-    html = html.replace(/^\> (.*$)/gim, "<blockquote><p>$1</p></blockquote>");
+    // 6. Section Headings with slug anchors
+    html = html.replace(/^### (.*$)/gim, (_, text) => {
+      const cleanText = text.trim();
+      const id = cleanText.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      return `<h3 id="${id}" class="text-lg font-bold text-slate-100 mt-8 mb-3 tracking-tight flex items-center gap-2">${cleanText}</h3>`;
+    });
 
-    // Horizontal Rules
-    html = html.replace(/^---$/gim, "<hr />");
+    html = html.replace(/^## (.*$)/gim, (_, text) => {
+      const cleanText = text.trim();
+      const id = cleanText.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      return `<h2 id="${id}" class="text-xl md:text-2xl font-extrabold text-slate-50 mt-12 mb-4 tracking-tight pt-4 border-t border-slate-800/80">${cleanText}</h2>`;
+    });
 
-    // Unordered lists
-    html = html.replace(/^\- (.*$)/gim, "<li>$1</li>");
-    html = html.replace(/(<li>.*<\/li>\n?)+/g, "<ul>$&</ul>");
+    html = html.replace(/^# (.*$)/gim, (_, text) => {
+      const cleanText = text.trim();
+      return `<h1 class="text-2xl md:text-3xl font-extrabold text-slate-50 mt-8 mb-4 tracking-tight">${cleanText}</h1>`;
+    });
 
-    // Tables
+    // 7. Bold & Italics
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-bold text-slate-100">$1</strong>');
+    html = html.replace(/\*([^*]+)\*/g, '<em class="italic text-slate-200">$1</em>');
+
+    // 8. Blockquotes / Executive Callouts
+    html = html.replace(/^\> (.*$)/gim, '<blockquote class="my-6 border-l-4 border-orange-500 pl-4 py-2 italic text-slate-300 bg-slate-900/40 rounded-r-lg"><p class="m-0">$1</p></blockquote>');
+
+    // 9. Horizontal Rules
+    html = html.replace(/^---$/gim, '<hr class="my-8 border-slate-800" />');
+
+    // 10. Unordered & Ordered Lists
+    html = html.replace(/^[\*\-] (.*$)/gim, '<li class="text-slate-300 my-1 leading-relaxed pl-1">$1</li>');
+    html = html.replace(/^\d+\.\s+(.*$)/gim, '<li class="text-slate-300 my-1 leading-relaxed pl-1">$1</li>');
+    html = html.replace(/(<li class="text-slate-300 my-1 leading-relaxed pl-1">.*<\/li>\n?)+/g, '<ul class="my-5 pl-6 list-disc space-y-1.5 marker:text-orange-500">$&</ul>');
+
+    // 11. Tables
     html = html.replace(/\|(.+)\|/g, (match) => {
       if (match.includes("---")) return ""; // header separator
       const cells = match
         .split("|")
         .filter((c) => c.trim().length > 0)
-        .map((c) => `<td>${c.trim()}</td>`)
+        .map((c) => `<td class="border border-slate-800 px-4 py-2.5 text-xs text-slate-300">${c.trim()}</td>`)
         .join("");
       return `<tr>${cells}</tr>`;
     });
-    html = html.replace(/(<tr>.*<\/tr>\n?)+/g, '<div class="table-container"><table><tbody>$&</tbody></table></div>');
+    html = html.replace(/(<tr>.*<\/tr>\n?)+/g, '<div class="overflow-x-auto my-6 rounded-xl border border-slate-800 bg-slate-900/60"><table class="w-full border-collapse text-left"><tbody>$&</tbody></table></div>');
 
-    // Paragraphs (lines separated by double newlines)
+    // 12. Paragraphs (lines separated by double newlines)
     const blocks = html.split(/\n\s*\n/);
     const formattedBlocks = blocks.map((block) => {
       const trimmed = block.trim();
@@ -241,23 +303,26 @@ ${keywords.map((kw) => `    - "${kw}"`).join("\n")}
         trimmed.startsWith("<pre") ||
         trimmed.startsWith("<blockquote") ||
         trimmed.startsWith("<ul") ||
-        trimmed.startsWith("<div class=\"table") ||
+        trimmed.startsWith("<ol") ||
+        trimmed.startsWith("<div") ||
+        trimmed.startsWith("<figure") ||
         trimmed.startsWith("<hr") ||
         trimmed.startsWith("___CODE_BLOCK_")
       ) {
         return trimmed;
       }
-      return `<p>${trimmed.replace(/\n/g, "<br />")}</p>`;
+      return `<p class="my-4 text-slate-300 text-[16px] md:text-[17px] leading-[1.8] font-normal tracking-[0.01em]">${trimmed.replace(/\n/g, "<br />")}</p>`;
     });
 
     html = formattedBlocks.filter(Boolean).join("\n\n");
 
-    // Restore Code Blocks
+    // 13. Restore Code Blocks
     codeBlocks.forEach((codeHtml, idx) => {
       html = html.replace(`___CODE_BLOCK_${idx}___`, codeHtml);
     });
 
-    return html;
+    // 14. Final security sanitization
+    return this.sanitizeHtml(html);
   }
 
   private static generateHtml(

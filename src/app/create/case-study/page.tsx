@@ -50,7 +50,10 @@ export default function CaseStudyGeneratorPage() {
   >("isometric_3d");
 
   // Batch Form State
-  const [batchScenariosText, setBatchScenariosText] = useState("");
+  const [batchCount, setBatchCount] = useState<number>(3);
+  const [batchScenariosText, setBatchScenariosText] = useState(
+    `Financial Services & Lending | Severe P99 latency spikes during flash transactions | Re-architected state mutations into an event-driven stream | Kafka, Go, Kubernetes | Reduced P99 latency by 92.5%\nHealthcare Telemetry & IoT | Real-time sensor synchronization failures | Edge-computed streaming event mesh | Rust, WebSockets, TimescaleDB | 99.999% uptime\nSupply Chain & Logistics | Non-deterministic route optimization | Multi-agent reasoning graph | Python, Ray, PostgreSQL | 34% fuel efficiency gain`
+  );
 
   // Execution & Progress State
   const [isGenerating, setIsGenerating] = useState(false);
@@ -87,13 +90,35 @@ export default function CaseStudyGeneratorPage() {
     loadBrandDefaults();
   }, [loadBrandDefaults]);
 
-  // Parse batch scenarios list
+  // Curated scenarios catalog for auto-generating up to 10 tailored enterprise case studies
+  const CURATED_SCENARIOS = [
+    "Financial Services & Lending | Severe P99 latency spikes during flash transactions | Re-architected state mutations into an event-driven stream | Kafka, Go, Kubernetes | Reduced P99 latency by 92.5%",
+    "Healthcare Telemetry & IoT | Real-time sensor synchronization failures | Edge-computed streaming event mesh | Rust, WebSockets, TimescaleDB | 99.999% uptime",
+    "Supply Chain & Logistics | Non-deterministic route optimization | Multi-agent reasoning graph | Python, Ray, PostgreSQL | 34% fuel efficiency gain",
+    "Tier-1 Insurance Carrier | 18-day medical claims backlog with disputes | Autonomous multi-agent swarms for claims adjudication | Multi-Agent Swarms, Private RAG, HIPAA VPC | 10x faster processing, $1.4M saved",
+    "Smart Manufacturing | 140+ hours annual unexpected downtime | Edge AI acoustic and vibration anomaly detectors | TensorRT, MQTT, Edge AI | 82% downtime reduction, $2.6M saved",
+    "B2B SaaS Platform | Customer churn due to reactive account reviews | ML-driven predictive user churn and retention engine | Python, XGBoost, PostgreSQL, MLflow | 32% churn reduction, $1.2M ARR saved",
+    "Industrial Quality Assurance | Micro-defects during high-speed PCB fabrication | High-resolution computer vision edge inference system | PyTorch, YOLOv10, Docker, CUDA | 99.8% defect detection accuracy",
+    "Cross-Border Banking | 3-week compliance bottleneck on wire transfers | Real-time AML transaction monitoring and sanction screening AI | Go, Apache Flink, Milvus Vector DB | 94% false positive reduction",
+    "Enterprise Cybersecurity | 40,000 daily SOC alerts causing analyst fatigue | Autonomous agentic tier-1 incident response & threat containment | Agent Swarms, LangGraph, Python | 88% automated containment, 3.4m MTTR",
+    "Global Telecommunications | 22-minute average support wait times during outages | Omni-channel conversational AI with live network telemetry | WebSockets, Claude 3.5, Redis | 62% call deflection, 4.8/5 CSAT",
+  ];
+
+  const handleGenerateScenarios = (count: number) => {
+    const targetCount = Math.max(1, Math.min(10, count));
+    setBatchCount(targetCount);
+    const selected = CURATED_SCENARIOS.slice(0, targetCount);
+    setBatchScenariosText(selected.join("\n"));
+  };
+
+  // Parse batch scenarios list (capped at maximum 10)
   const parsedBatchItems =
     generationMode === "batch"
       ? batchScenariosText
           .split("\n")
           .map((line) => line.trim())
           .filter(Boolean)
+          .slice(0, 10)
           .map((line) => {
             const parts = line.split("|").map((p) => p.trim());
             return {
@@ -581,37 +606,78 @@ export default function CaseStudyGeneratorPage() {
                     Batch Case Studies (Bulk Queue)
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Enter one scenario per line using the format: <span className="font-mono text-slate-700">Industry | Challenge | Solution | Tech Stack | Results</span>
+                    Choose how many customer stories to generate in one batch (up to 10), or customize lines below.
                   </p>
                 </div>
 
                 <button
                   type="button"
-                  onClick={handleLoadSampleBatch}
-                  className="text-xs text-orange-600 hover:text-orange-700 font-medium flex items-center gap-1"
+                  onClick={() => handleGenerateScenarios(batchCount || 5)}
+                  className="text-xs text-orange-600 hover:text-orange-700 font-medium flex items-center gap-1 bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-md border border-orange-200 transition-colors"
                 >
                   <Sparkles className="h-3 w-3" />
-                  <span>Load Sample Scenarios</span>
+                  <span>Auto-Generate {batchCount || 5} Scenarios</span>
                 </button>
+              </div>
+
+              {/* Batch Size Selection */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                    <Layers className="h-3.5 w-3.5 text-orange-600" />
+                    <span>Bulk Batch Size (Up to 10 Case Studies)</span>
+                  </label>
+                  <span className="text-[11px] font-mono text-slate-500">
+                    {parsedBatchItems.length} of 10 slots used
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] text-slate-500 font-medium mr-1">Quick Select:</span>
+                  {[2, 3, 5, 8, 10].map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => handleGenerateScenarios(num)}
+                      className={`h-7 px-3 text-xs font-semibold rounded-md border transition-all ${
+                        batchCount === num && parsedBatchItems.length === num
+                          ? "bg-orange-600 text-white border-orange-600 shadow-sm"
+                          : "bg-white text-slate-700 border-slate-300 hover:border-orange-400 hover:text-orange-600"
+                      }`}
+                    >
+                      {num} Case Studies {num === 10 ? "(Max)" : ""}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-semibold text-slate-700">
-                    Scenarios Queue (One per line)
+                    Scenarios Queue (Format: <span className="font-mono text-slate-500 font-normal">Industry | Challenge | Solution | Tech Stack | Results</span> &bull; Max 10)
                   </label>
-                  <span className="text-[11px] text-slate-500 font-mono">
-                    {parsedBatchItems.length} scenario{parsedBatchItems.length !== 1 ? "s" : ""} queued
+                  <span className={`text-[11px] font-semibold ${parsedBatchItems.length >= 10 ? "text-amber-700 font-mono" : "text-slate-500"}`}>
+                    {parsedBatchItems.length} / 10 Scenarios Queued
                   </span>
                 </div>
                 <Textarea
                   required
                   rows={6}
                   value={batchScenariosText}
-                  onChange={(e) => setBatchScenariosText(e.target.value)}
+                  onChange={(e) => {
+                    setBatchScenariosText(e.target.value);
+                    const lines = e.target.value.split("\n").filter((l) => l.trim().length > 0);
+                    setBatchCount(Math.min(10, lines.length || 1));
+                  }}
                   placeholder={`Financial Services & Lending | Severe P99 latency spikes during flash transactions | Re-architected state mutations into an event-driven stream | Kafka, Go, Kubernetes | Reduced P99 latency by 92.5%\nHealthcare Telemetry & IoT | Real-time sensor synchronization failures | Edge-computed streaming event mesh | Rust, WebSockets, TimescaleDB | 99.999% uptime\nSupply Chain & Logistics | Non-deterministic route optimization | Multi-agent reasoning graph | Python, Ray, PostgreSQL | 34% fuel efficiency gain`}
-                  className="font-mono text-xs leading-relaxed"
+                  className="font-mono text-xs leading-relaxed bg-white"
                 />
+                {batchScenariosText.split("\n").filter((l) => l.trim().length > 0).length > 10 && (
+                  <p className="text-[11px] text-amber-700 mt-1 font-medium flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    <span>Only the first 10 scenarios will be processed in this batch run.</span>
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">

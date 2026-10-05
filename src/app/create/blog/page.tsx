@@ -45,11 +45,14 @@ export default function BlogGeneratorPage() {
 
   // Form State
   const [topic, setTopic] = useState("");
-  const [batchTopicsText, setBatchTopicsText] = useState("");
+  const [batchCount, setBatchCount] = useState<number>(3);
+  const [batchTopicsText, setBatchTopicsText] = useState(
+    `Designing Zero-Trust Architecture for Microservices in Kubernetes\nAutonomous Multi-Agent Orchestration Patterns in High-Throughput Fintech\nEvent-Driven Microfrontends: Real-World Latency Benchmarks and ROI`
+  );
   const [audience, setAudience] = useState("");
   const [tone, setTone] = useState("");
   const [desiredLength, setDesiredLength] = useState<"short" | "medium" | "long">("medium");
-  const [category, setCategory] = useState("Engineering");
+  const [category, setCategory] = useState("Enterprise AI & Cloud Engineering");
   const [researchPreference, setResearchPreference] = useState(true);
 
   // AI Image Generation Settings
@@ -80,7 +83,7 @@ export default function BlogGeneratorPage() {
         if (brand) {
           if (brand.audience && !audience) setAudience(brand.audience);
           if (brand.tone && !tone) setTone(brand.tone);
-          if (brand.industry && category === "Engineering") setCategory(brand.industry);
+          if (brand.industry && category === "Enterprise AI & Cloud Engineering") setCategory(brand.industry);
         }
       }
     } catch (err) {
@@ -92,13 +95,35 @@ export default function BlogGeneratorPage() {
     loadBrandDefaults();
   }, [loadBrandDefaults]);
 
-  // Extract parsed topics list
+  // Curated ideas catalog for auto-generating up to 10 tailored topics
+  const CURATED_IDEAS = [
+    "Designing Zero-Trust Architecture for Microservices in Kubernetes",
+    "Autonomous Multi-Agent Orchestration Patterns in High-Throughput Fintech",
+    "Event-Driven Microfrontends: Real-World Latency Benchmarks and ROI",
+    "Real-Time Vector Search & Semantic Caching: Slashing LLM Latency by 80%",
+    "Deterministic Guardrails & Telemetry for Production Enterprise LLMs",
+    "Hybrid Cloud FinOps: Optimizing GPU Compute Allocation and Cloud Spend",
+    "Continuous Observability: Distributed Tracing in Microfrontends and Edge Services",
+    "Graph RAG vs. Vector RAG: Choosing the Right Knowledge Retrieval Architecture",
+    "Low-Latency Streaming Audio Pipelines for Enterprise Voice AI Agents",
+    "Automated Model Governance & Compliance in Regulated Enterprise AI",
+  ];
+
+  const handleGenerateTopicIdeas = (count: number) => {
+    const targetCount = Math.max(1, Math.min(10, count));
+    setBatchCount(targetCount);
+    const selected = CURATED_IDEAS.slice(0, targetCount);
+    setBatchTopicsText(selected.join("\n"));
+  };
+
+  // Extract parsed topics list (capped at maximum 10)
   const parsedTopics =
     generationMode === "batch"
       ? batchTopicsText
           .split("\n")
           .map((t) => t.trim())
           .filter(Boolean)
+          .slice(0, 10)
       : topic.trim()
       ? [topic.trim()]
       : [];
@@ -175,9 +200,7 @@ export default function BlogGeneratorPage() {
   };
 
   const handleLoadSampleBatch = () => {
-    setBatchTopicsText(
-      `Designing Zero-Trust Architecture for Microservices in Kubernetes\nAutonomous Multi-Agent Orchestration Patterns in High-Throughput Fintech\nEvent-Driven Microfrontends: Real-World Latency Benchmarks and ROI`
-    );
+    handleGenerateTopicIdeas(3);
   };
 
   return (
@@ -392,7 +415,7 @@ export default function BlogGeneratorPage() {
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {generationMode === "batch"
-                    ? "Enter up to 10 topics (one per line). Each will be independently researched and generated."
+                    ? "Choose how many articles to generate in one run (up to 10), or customize topics below."
                     : "Specify the primary topic and target category"}
                 </p>
               </div>
@@ -400,11 +423,11 @@ export default function BlogGeneratorPage() {
               {generationMode === "batch" && (
                 <button
                   type="button"
-                  onClick={handleLoadSampleBatch}
-                  className="text-xs text-orange-600 hover:text-orange-700 font-medium flex items-center gap-1"
+                  onClick={() => handleGenerateTopicIdeas(batchCount || 5)}
+                  className="text-xs text-orange-600 hover:text-orange-700 font-medium flex items-center gap-1 bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-md border border-orange-200 transition-colors"
                 >
                   <Sparkles className="h-3 w-3" />
-                  <span>Load Sample Topics</span>
+                  <span>Auto-Generate {batchCount || 5} Ideas</span>
                 </button>
               )}
             </div>
@@ -422,23 +445,66 @@ export default function BlogGeneratorPage() {
                 />
               </div>
             ) : (
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Topics List (One per line)
-                  </label>
-                  <span className="text-[11px] text-slate-500 font-mono">
-                    {parsedTopics.length} topic{parsedTopics.length !== 1 ? "s" : ""} queued
-                  </span>
+              <div className="space-y-3">
+                {/* Batch Size Selection */}
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                      <Layers className="h-3.5 w-3.5 text-orange-600" />
+                      <span>Bulk Batch Size (Up to 10 Articles)</span>
+                    </label>
+                    <span className="text-[11px] font-mono text-slate-500">
+                      {parsedTopics.length} of 10 slots used
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] text-slate-500 font-medium mr-1">Quick Select:</span>
+                    {[2, 3, 5, 8, 10].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => handleGenerateTopicIdeas(num)}
+                        className={`h-7 px-3 text-xs font-semibold rounded-md border transition-all ${
+                          batchCount === num && parsedTopics.length === num
+                            ? "bg-orange-600 text-white border-orange-600 shadow-sm"
+                            : "bg-white text-slate-700 border-slate-300 hover:border-orange-400 hover:text-orange-600"
+                        }`}
+                      >
+                        {num} Articles {num === 10 ? "(Max)" : ""}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <Textarea
-                  required
-                  rows={5}
-                  value={batchTopicsText}
-                  onChange={(e) => setBatchTopicsText(e.target.value)}
-                  placeholder={`Designing Zero-Trust Architecture for Microservices in Kubernetes\nAutonomous Multi-Agent Orchestration Patterns in High-Throughput Fintech\nEvent-Driven Microfrontends: Real-World Latency Benchmarks and ROI`}
-                  className="font-mono text-xs leading-relaxed"
-                />
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Topics Queue (1 topic per line &bull; Max 10)
+                    </label>
+                    <span className={`text-[11px] font-semibold ${parsedTopics.length >= 10 ? "text-amber-700 font-mono" : "text-slate-500"}`}>
+                      {parsedTopics.length} / 10 Articles Queued
+                    </span>
+                  </div>
+                  <Textarea
+                    required
+                    rows={6}
+                    value={batchTopicsText}
+                    onChange={(e) => {
+                      setBatchTopicsText(e.target.value);
+                      const lines = e.target.value.split("\n").filter((l) => l.trim().length > 0);
+                      setBatchCount(Math.min(10, lines.length || 1));
+                    }}
+                    placeholder={`Designing Zero-Trust Architecture for Microservices in Kubernetes\nAutonomous Multi-Agent Orchestration Patterns in High-Throughput Fintech\nEvent-Driven Microfrontends: Real-World Latency Benchmarks and ROI\nReal-Time Vector Search & Semantic Caching: Slashing LLM Latency by 80%\nDeterministic Guardrails & Telemetry for Production Enterprise LLMs`}
+                    className="font-mono text-xs leading-relaxed bg-white"
+                  />
+                  {batchTopicsText.split("\n").filter((l) => l.trim().length > 0).length > 10 && (
+                    <p className="text-[11px] text-amber-700 mt-1 font-medium flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      <span>Only the first 10 topics will be processed in this batch run.</span>
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 

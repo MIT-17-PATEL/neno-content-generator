@@ -99,16 +99,44 @@ export class ImageGenerator {
     }
 
     // High-Fidelity Vector Graphic Generator fallback
-    const svgUrl = this.generateDynamicSvg(options.topic, style, aspectRatio);
+    const { svgString, publicUrl, storageKey } = await this.saveDynamicSvg(options.topic, style, aspectRatio);
     return {
       title: `${options.topic} — Featured Visual`,
       prompt,
       altText,
-      publicUrl: svgUrl,
-      storageKey: `generated/${Date.now()}_vector.svg`,
+      publicUrl,
+      storageKey,
       aspectRatio,
       style,
     };
+  }
+
+  private static async saveDynamicSvg(
+    topic: string,
+    style: ImageStylePreset,
+    aspectRatio: ImageAspectRatio
+  ): Promise<{ svgString: string; publicUrl: string; storageKey: string }> {
+    const svgString = this.generateDynamicSvg(topic, style, aspectRatio);
+    const cleanName = topic.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40);
+    const filename = `hero_${cleanName}_${Date.now().toString().slice(-6)}.svg`;
+    const storageKey = `uploads/media/${filename}`;
+    const publicUrl = `/${storageKey}`;
+
+    try {
+      // Write to public/uploads/media folder for clean static asset serving
+      const fs = await import("fs");
+      const path = await import("path");
+      const uploadDir = path.join(process.cwd(), "public", "uploads", "media");
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      const filePath = path.join(uploadDir, filename);
+      fs.writeFileSync(filePath, svgString, "utf8");
+    } catch (err) {
+      console.warn("Could not write SVG to static uploads folder:", err);
+    }
+
+    return { svgString, publicUrl, storageKey };
   }
 
   private static generateDynamicSvg(
