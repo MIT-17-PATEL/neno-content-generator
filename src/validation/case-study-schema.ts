@@ -55,6 +55,7 @@ export const caseStudyOutputSchema = z.object({
     brief: z.string(),
     prompt: z.string(),
     altText: z.string(),
+    url: z.string().optional(),
   }),
 });
 

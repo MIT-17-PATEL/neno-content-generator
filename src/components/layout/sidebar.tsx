@@ -6,6 +6,8 @@ import {
   LayoutDashboard,
   PlusCircle,
   FileText,
+  Newspaper,
+  Briefcase,
   Search,
   Image as ImageIcon,
   Sliders,
@@ -22,6 +24,8 @@ const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Create", href: "/create", icon: PlusCircle },
   { name: "Content", href: "/content", icon: FileText },
+  { name: "Blog", href: "/blog", icon: Newspaper },
+  { name: "Case Studies", href: "/case-studies", icon: Briefcase },
   { name: "Research", href: "/research", icon: Search },
   { name: "Media", href: "/media", icon: ImageIcon },
   { name: "Templates", href: "/templates", icon: Sliders },
@@ -53,7 +57,10 @@ export function Sidebar() {
           Workspace
         </div>
         {navigation.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive =
+            item.href === "/"
+              ? pathname === "/"
+              : pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;
           return (
             <Link

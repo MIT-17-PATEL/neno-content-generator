@@ -2,6 +2,9 @@ import { blogGenerationOutputSchema, BlogGenerationOutput } from "@/validation/b
 import { ContentService, generateSlug } from "@/services/content-service";
 import { VersionService } from "@/services/version-service";
 import { ResearchService, GenerationService } from "@/services/research-service";
+import { MediaService } from "@/services/media-service";
+import { ImageGenerator } from "@/lib/ai/image-generator";
+import { ImageStylePreset } from "@/types";
 import { dataStore } from "@/server/data-store";
 import { callAiStructured, isAiConfigured, getActiveAiModel } from "@/lib/ai/ai-client";
 
@@ -14,6 +17,9 @@ export interface BlogGenerationRequest {
   desiredLength: "short" | "medium" | "long";
   category: string;
   researchPreference: boolean;
+  customImagePrompt?: string;
+  imageStyle?: ImageStylePreset;
+  autoGenerateImage?: boolean;
 }
 
 export async function runBlogGenerationPipeline(
@@ -294,7 +300,72 @@ Adopting these architectural patterns enables **${brandName}** teams to operate 
     // Validate output with Zod schema
     const validatedOutput = blogGenerationOutputSchema.parse(rawObj);
 
-    // 5. Create Content Item in Database
+    // 5. Auto-Generate Featured Hero Image (if requested or default enabled)
+    let generatedImageUrl = "";
+    let finalImagePrompt = validatedOutput.featuredImage.prompt;
+    let finalImageAlt = validatedOutput.featuredImage.altText;
+
+    if (params.autoGenerateImage !== false) {
+      try {
+        const imageResult = await ImageGenerator.generate({
+          topic: params.topic,
+          category: validatedOutput.category || params.category,
+          style: params.imageStyle || "dark_tech",
+          aspectRatio: "16:9",
+          customPrompt: params.customImagePrompt || validatedOutput.featuredImage.prompt,
+          brandName,
+        });
+
+        if (imageResult?.publicUrl) {
+          generatedImageUrl = imageResult.publicUrl;
+          finalImagePrompt = imageResult.prompt || finalImagePrompt;
+          finalImageAlt = imageResult.altText || finalImageAlt;
+
+          // Store in Media Assets database
+          await MediaService.create({
+            workspaceId: params.workspaceId,
+            type: "featured_image",
+            title: `${validatedOutput.title} — Featured Hero`,
+            prompt: finalImagePrompt,
+            altText: finalImageAlt,
+            aspectRatio: "16:9",
+            style: params.imageStyle || "dark_tech",
+            storageKey: imageResult.storageKey || `generated/${Date.now()}.png`,
+            publicUrl: generatedImageUrl,
+            fileSize: 45200,
+            mimeType: generatedImageUrl.startsWith("data:image/svg") ? "image/svg+xml" : "image/png",
+          });
+        }
+      } catch (imgErr) {
+        console.warn("Auto image generation during blog pipeline:", imgErr);
+      }
+    }
+
+    // Attach generated image to output object
+    if (generatedImageUrl) {
+      validatedOutput.featuredImage = {
+        brief: generatedImageUrl,
+        prompt: finalImagePrompt,
+        altText: finalImageAlt,
+        url: generatedImageUrl,
+      };
+
+      // Embed the hero visual markdown into the article draft
+      if (!validatedOutput.article.includes(generatedImageUrl)) {
+        const heroMarkdown = `\n\n![${validatedOutput.title}](${generatedImageUrl})\n\n`;
+        if (validatedOutput.article.includes("---")) {
+          const firstDivider = validatedOutput.article.indexOf("---");
+          validatedOutput.article =
+            validatedOutput.article.slice(0, firstDivider) +
+            heroMarkdown +
+            validatedOutput.article.slice(firstDivider);
+        } else {
+          validatedOutput.article = heroMarkdown + validatedOutput.article;
+        }
+      }
+    }
+
+    // 6. Create Content Item in Database
     const contentItem = await ContentService.create({
       workspaceId: params.workspaceId,
       type: "blog",
@@ -304,7 +375,7 @@ Adopting these architectural patterns enables **${brandName}** teams to operate 
       createdBy: params.userId,
     });
 
-    // 6. Create Initial Version Snapshot with SEO metadata
+    // 7. Create Initial Version Snapshot with SEO metadata & Featured Image
     await VersionService.createVersion({
       contentId: contentItem.id,
       content: validatedOutput.article,
@@ -313,14 +384,19 @@ Adopting these architectural patterns enables **${brandName}** teams to operate 
         metaDescription: validatedOutput.seo.metaDescription,
         keywords: validatedOutput.seo.keywords,
         slug: validatedOutput.seo.slug,
-        featuredImagePrompt: validatedOutput.featuredImage.prompt,
-        featuredImageBrief: validatedOutput.featuredImage.brief,
+        featuredImagePrompt: finalImagePrompt,
+        featuredImageBrief: generatedImageUrl || validatedOutput.featuredImage.brief,
+        coverImage: generatedImageUrl || undefined,
+        ogImage: generatedImageUrl || undefined,
+        featuredImageUrl: generatedImageUrl || undefined,
+        author: validatedOutput.author || "Mit Patel",
+        tags: [validatedOutput.category || params.category],
       },
       generationRunId: initialRun.id,
       createdBy: params.userId,
     });
 
-    // 7. Save Research Sources if any
+    // 8. Save Research Sources if any
     for (const src of validatedOutput.sources) {
       await ResearchService.addSource({
         contentId: contentItem.id,
@@ -332,7 +408,7 @@ Adopting these architectural patterns enables **${brandName}** teams to operate 
       });
     }
 
-    // 8. Update generation run record to completed
+    // 9. Update generation run record to completed
     const approxTokens = Math.round(validatedOutput.article.length / 4);
     await GenerationService.completeRun(initialRun.id, {
       outputData: validatedOutput,

@@ -38,6 +38,17 @@ export const blogGenerationInputSchema = z.object({
   desiredLength: z.enum(["short", "medium", "long"]).default("medium"),
   category: z.string().min(1, "Category is required"),
   researchPreference: z.boolean().default(true),
+  customImagePrompt: z.string().optional(),
+  imageStyle: z
+    .enum([
+      "dark_tech",
+      "isometric_3d",
+      "minimalist_vector",
+      "architectural_blueprint",
+      "editorial_photo",
+    ])
+    .optional(),
+  autoGenerateImage: z.boolean().optional().default(true),
 });
 
 export const caseStudyInputSchema = z.object({
@@ -48,6 +59,17 @@ export const caseStudyInputSchema = z.object({
   technology: z.string().min(2, "Technology stack is required"),
   resultsMetrics: z.string().min(5, "Results and metrics are required"),
   targetAudience: z.string().min(2, "Target audience is required"),
+  customImagePrompt: z.string().optional(),
+  imageStyle: z
+    .enum([
+      "dark_tech",
+      "isometric_3d",
+      "minimalist_vector",
+      "architectural_blueprint",
+      "editorial_photo",
+    ])
+    .optional(),
+  autoGenerateImage: z.boolean().optional().default(true),
 });
 
 export type SignUpInput = z.infer<typeof signUpSchema>;

@@ -66,6 +66,11 @@ export interface ContentVersion {
     featuredImageBrief?: string;
     featuredImagePrompt?: string;
     coverImage?: string;
+    ogImage?: string;
+    featuredImageUrl?: string;
+    canonicalUrl?: string;
+    author?: string;
+    tags?: string[];
   };
   generationRunId?: string;
   createdBy: string;

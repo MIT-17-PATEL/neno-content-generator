@@ -4,14 +4,14 @@ import { db } from "@/db/client";
 
 const globalForVersions = global as unknown as {
   memoryVersions?: Map<string, DbContentVersion[]>;
+  hasInitialized?: boolean;
 };
 const memoryVersions: Map<string, DbContentVersion[]> =
   globalForVersions.memoryVersions || new Map<string, DbContentVersion[]>();
-if (process.env.NODE_ENV !== "production") {
-  globalForVersions.memoryVersions = memoryVersions;
-}
+globalForVersions.memoryVersions = memoryVersions;
 
-if (memoryVersions.size === 0) {
+if (!globalForVersions.hasInitialized) {
+  globalForVersions.hasInitialized = true;
   memoryVersions.set("cnt_demo_blog_1", [
     {
       id: "ver_demo_blog_1",

@@ -35,6 +35,9 @@ export async function POST(req: NextRequest) {
       desiredLength: parsed.data.desiredLength,
       category: parsed.data.category,
       researchPreference: parsed.data.researchPreference,
+      customImagePrompt: parsed.data.customImagePrompt,
+      imageStyle: parsed.data.imageStyle,
+      autoGenerateImage: parsed.data.autoGenerateImage,
     });
 
     return NextResponse.json({

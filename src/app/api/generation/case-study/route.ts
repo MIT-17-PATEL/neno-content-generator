@@ -36,6 +36,9 @@ export async function POST(req: NextRequest) {
       technology: parsed.data.technology,
       resultsMetrics: parsed.data.resultsMetrics,
       targetAudience: parsed.data.targetAudience,
+      customImagePrompt: parsed.data.customImagePrompt,
+      imageStyle: parsed.data.imageStyle,
+      autoGenerateImage: parsed.data.autoGenerateImage,
     });
 
     return NextResponse.json({

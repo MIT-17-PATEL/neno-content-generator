@@ -2,6 +2,9 @@ import { caseStudyOutputSchema, CaseStudyOutput } from "@/validation/case-study-
 import { ContentService, generateSlug } from "@/services/content-service";
 import { VersionService } from "@/services/version-service";
 import { GenerationService } from "@/services/research-service";
+import { MediaService } from "@/services/media-service";
+import { ImageGenerator } from "@/lib/ai/image-generator";
+import { ImageStylePreset } from "@/types";
 import { dataStore } from "@/server/data-store";
 import { callAiStructured, isAiConfigured, getActiveAiModel } from "@/lib/ai/ai-client";
 
@@ -15,6 +18,9 @@ export interface CaseStudyGenerationRequest {
   technology: string;
   resultsMetrics: string;
   targetAudience: string;
+  customImagePrompt?: string;
+  imageStyle?: ImageStylePreset;
+  autoGenerateImage?: boolean;
 }
 
 export async function runCaseStudyGenerationPipeline(
@@ -246,6 +252,68 @@ By combining **${techArray.join(", ")}** with disciplined architectural patterns
 
     const validatedOutput = caseStudyOutputSchema.parse(rawObj);
 
+    // Auto-Generate Featured Visual Asset
+    let generatedImageUrl = "";
+    let finalImagePrompt = validatedOutput.featuredVisual.prompt;
+    let finalImageAlt = validatedOutput.featuredVisual.altText;
+
+    if (params.autoGenerateImage !== false) {
+      try {
+        const imageResult = await ImageGenerator.generate({
+          topic: `${params.clientIndustry} Case Study: ${validatedOutput.title}`,
+          category: validatedOutput.category || params.clientIndustry,
+          style: params.imageStyle || "isometric_3d",
+          aspectRatio: "16:9",
+          customPrompt: params.customImagePrompt || validatedOutput.featuredVisual.prompt,
+          brandName,
+        });
+
+        if (imageResult?.publicUrl) {
+          generatedImageUrl = imageResult.publicUrl;
+          finalImagePrompt = imageResult.prompt || finalImagePrompt;
+          finalImageAlt = imageResult.altText || finalImageAlt;
+
+          await MediaService.create({
+            workspaceId: params.workspaceId,
+            type: "featured_image",
+            title: `${validatedOutput.title} — Featured Visual`,
+            prompt: finalImagePrompt,
+            altText: finalImageAlt,
+            aspectRatio: "16:9",
+            style: params.imageStyle || "isometric_3d",
+            storageKey: imageResult.storageKey || `generated/cs_${Date.now()}.png`,
+            publicUrl: generatedImageUrl,
+            fileSize: 45200,
+            mimeType: generatedImageUrl.startsWith("data:image/svg") ? "image/svg+xml" : "image/png",
+          });
+        }
+      } catch (imgErr) {
+        console.warn("Case study image generation fallback:", imgErr);
+      }
+    }
+
+    if (generatedImageUrl) {
+      validatedOutput.featuredVisual = {
+        brief: generatedImageUrl,
+        prompt: finalImagePrompt,
+        altText: finalImageAlt,
+        url: generatedImageUrl,
+      };
+
+      if (!validatedOutput.fullMarkdown.includes(generatedImageUrl)) {
+        const heroMarkdown = `\n\n![${validatedOutput.title}](${generatedImageUrl})\n\n`;
+        if (validatedOutput.fullMarkdown.includes("---")) {
+          const firstDivider = validatedOutput.fullMarkdown.indexOf("---");
+          validatedOutput.fullMarkdown =
+            validatedOutput.fullMarkdown.slice(0, firstDivider) +
+            heroMarkdown +
+            validatedOutput.fullMarkdown.slice(firstDivider);
+        } else {
+          validatedOutput.fullMarkdown = heroMarkdown + validatedOutput.fullMarkdown;
+        }
+      }
+    }
+
     const contentItem = await ContentService.create({
       workspaceId: params.workspaceId,
       type: "case-study",
@@ -263,8 +331,13 @@ By combining **${techArray.join(", ")}** with disciplined architectural patterns
         metaDescription: validatedOutput.seo.metaDescription,
         keywords: validatedOutput.seo.keywords,
         slug: validatedOutput.seo.slug,
-        featuredImagePrompt: validatedOutput.featuredVisual.prompt,
-        featuredImageBrief: validatedOutput.featuredVisual.brief,
+        featuredImagePrompt: finalImagePrompt,
+        featuredImageBrief: generatedImageUrl || validatedOutput.featuredVisual.brief,
+        coverImage: generatedImageUrl || undefined,
+        ogImage: generatedImageUrl || undefined,
+        featuredImageUrl: generatedImageUrl || undefined,
+        author: validatedOutput.clientOwner || "Neno Case Studies",
+        tags: [validatedOutput.category || params.clientIndustry],
       },
       generationRunId: initialRun.id,
       createdBy: params.userId,

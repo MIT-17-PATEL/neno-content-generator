@@ -12,6 +12,8 @@ export function Header() {
 
   const getPageTitle = (path: string) => {
     if (path === "/") return "Dashboard";
+    if (path.startsWith("/blog")) return "Blog Management";
+    if (path.startsWith("/case-studies")) return "Case Studies Management";
     if (path.startsWith("/create")) return "Create Content";
     if (path.startsWith("/content")) return "Content Library";
     if (path.startsWith("/research")) return "Research Workspace";

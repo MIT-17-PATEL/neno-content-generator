@@ -5,56 +5,19 @@ import { db } from "@/db/client";
 // In-memory persistent database store for local development without live PostgreSQL
 const globalForContent = global as unknown as {
   memoryContent?: Map<string, DbContentItem>;
+  hasInitialized?: boolean;
 };
 const memoryContent: Map<string, DbContentItem> =
   globalForContent.memoryContent || new Map<string, DbContentItem>();
-if (process.env.NODE_ENV !== "production") {
-  globalForContent.memoryContent = memoryContent;
+globalForContent.memoryContent = memoryContent;
+
+// Only seed once on initial process startup, never re-seed when user deletes items
+if (!globalForContent.hasInitialized) {
+  globalForContent.hasInitialized = true;
 }
 
-// Seed demo items if empty
-if (memoryContent.size === 0) {
-  const seedItems: DbContentItem[] = [
-    {
-      id: "cnt_demo_blog_1",
-      workspace_id: "ws_default_neno",
-      type: "blog",
-      title: "Building Resilient Agentic Workflows with Next.js 14 and Deep Reasoning",
-      slug: "building-resilient-agentic-workflows-nextjs-14",
-      status: "approved",
-      category: "Enterprise AI & Cloud Engineering",
-      excerpt: "An architectural deep-dive into autonomous multi-agent systems, circuit breaking, and structured validation pipelines.",
-      created_by: "usr_default_mit",
-      created_at: new Date(Date.now() - 3600 * 24 * 1000),
-      updated_at: new Date(Date.now() - 3600 * 2 * 1000),
-    },
-    {
-      id: "cnt_demo_case_1",
-      workspace_id: "ws_default_neno",
-      type: "case-study",
-      title: "Autonomous Content Engine: Slashing Enterprise Production Latency by 85%",
-      slug: "autonomous-content-engine-slashing-production-latency",
-      status: "in_review",
-      category: "Cloud Modernization & DevOps",
-      excerpt: "How a global SaaS enterprise automated research-grounded technical documentation with multi-agent orchestration.",
-      created_by: "usr_default_mit",
-      created_at: new Date(Date.now() - 3600 * 48 * 1000),
-      updated_at: new Date(Date.now() - 3600 * 5 * 1000),
-    },
-  ];
-  for (const it of seedItems) {
-    memoryContent.set(it.id, it);
-  }
-}
-
-export function generateSlug(title: string): string {
-  return title
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/[\s_-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+import { generateSlug } from "@/lib/utils";
+export { generateSlug };
 
 export class ContentService {
   static async listByWorkspace(
@@ -189,6 +152,79 @@ export class ContentService {
     item.updated_at = new Date();
     memoryContent.set(contentId, item);
     return item;
+  }
+
+  static async updateItem(
+    workspaceId: string,
+    contentId: string,
+    data: {
+      title?: string;
+      slug?: string;
+      category?: string;
+      excerpt?: string;
+      status?: DbContentItem["status"];
+    }
+  ): Promise<DbContentItem | null> {
+    if (db.isConfigured) {
+      const updates: string[] = [];
+      const values: unknown[] = [];
+      if (data.title !== undefined) {
+        values.push(data.title);
+        updates.push(`title = $${values.length}`);
+      }
+      if (data.slug !== undefined) {
+        values.push(data.slug);
+        updates.push(`slug = $${values.length}`);
+      }
+      if (data.category !== undefined) {
+        values.push(data.category);
+        updates.push(`category = $${values.length}`);
+      }
+      if (data.excerpt !== undefined) {
+        values.push(data.excerpt);
+        updates.push(`excerpt = $${values.length}`);
+      }
+      if (data.status !== undefined) {
+        values.push(data.status);
+        updates.push(`status = $${values.length}`);
+      }
+      updates.push("updated_at = NOW()");
+      values.push(contentId, workspaceId);
+      const query = `UPDATE content_items SET ${updates.join(", ")} WHERE id = $${values.length - 1} AND workspace_id = $${values.length} RETURNING *`;
+      const res = await db.query<DbContentItem>(query, values);
+      return res.rows[0] || null;
+    }
+
+    const item = memoryContent.get(contentId);
+    if (!item || (workspaceId && item.workspace_id !== workspaceId)) return null;
+    if (data.title !== undefined) item.title = data.title;
+    if (data.slug !== undefined) item.slug = data.slug;
+    if (data.category !== undefined) item.category = data.category;
+    if (data.excerpt !== undefined) item.excerpt = data.excerpt;
+    if (data.status !== undefined) item.status = data.status;
+    item.updated_at = new Date();
+    memoryContent.set(contentId, item);
+    return item;
+  }
+
+  static async duplicate(
+    workspaceId: string,
+    contentId: string,
+    userId?: string
+  ): Promise<DbContentItem | null> {
+    const original = await this.getById(workspaceId, contentId);
+    if (!original) return null;
+
+    const newItem = await this.create({
+      workspaceId,
+      type: original.type,
+      title: `${original.title} (Copy)`,
+      category: original.category,
+      excerpt: original.excerpt,
+      createdBy: userId || original.created_by,
+    });
+
+    return newItem;
   }
 
   static async delete(
