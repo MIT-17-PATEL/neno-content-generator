@@ -46,6 +46,9 @@ export interface DbContentItem {
   excerpt?: string;
   current_version_id?: string;
   created_by: string;
+  deleted_at?: Date | null;
+  deleted_by?: string | null;
+  permanent_delete_at?: Date | null;
   created_at: Date;
   updated_at: Date;
 }

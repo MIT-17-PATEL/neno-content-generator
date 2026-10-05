@@ -49,6 +49,9 @@ export interface ContentItem {
   excerpt?: string;
   currentVersionId?: string;
   createdBy: string;
+  deletedAt?: string | null;
+  deletedBy?: string | null;
+  permanentDeleteAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

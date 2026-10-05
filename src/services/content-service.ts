@@ -22,17 +22,29 @@ export { generateSlug };
 export class ContentService {
   static async listByWorkspace(
     workspaceId: string,
-    options?: { type?: string; status?: string; search?: string }
+    options?: {
+      type?: string;
+      status?: string;
+      search?: string;
+      onlyDeleted?: boolean;
+      includeDeleted?: boolean;
+    }
   ): Promise<DbContentItem[]> {
     if (db.isConfigured) {
       let query = "SELECT * FROM content_items WHERE workspace_id = $1";
       const params: unknown[] = [workspaceId];
 
-      if (options?.type) {
+      if (options?.onlyDeleted) {
+        query += " AND deleted_at IS NOT NULL";
+      } else if (!options?.includeDeleted) {
+        query += " AND deleted_at IS NULL";
+      }
+
+      if (options?.type && options.type !== "all") {
         params.push(options.type);
         query += ` AND type = $${params.length}`;
       }
-      if (options?.status) {
+      if (options?.status && options.status !== "all") {
         params.push(options.status);
         query += ` AND status = $${params.length}`;
       }
@@ -41,7 +53,12 @@ export class ContentService {
         query += ` AND (title ILIKE $${params.length} OR excerpt ILIKE $${params.length})`;
       }
 
-      query += " ORDER BY updated_at DESC";
+      if (options?.onlyDeleted) {
+        query += " ORDER BY deleted_at DESC NULLS LAST";
+      } else {
+        query += " ORDER BY updated_at DESC";
+      }
+
       const result = await db.query<DbContentItem>(query, params);
       return result.rows;
     }
@@ -50,8 +67,18 @@ export class ContentService {
       (c) => c.workspace_id === workspaceId
     );
 
-    if (options?.type) items = items.filter((c) => c.type === options.type);
-    if (options?.status) items = items.filter((c) => c.status === options.status);
+    if (options?.onlyDeleted) {
+      items = items.filter((c) => Boolean(c.deleted_at));
+    } else if (!options?.includeDeleted) {
+      items = items.filter((c) => !c.deleted_at);
+    }
+
+    if (options?.type && options.type !== "all") {
+      items = items.filter((c) => c.type === options.type);
+    }
+    if (options?.status && options.status !== "all") {
+      items = items.filter((c) => c.status === options.status);
+    }
     if (options?.search) {
       const q = options.search.toLowerCase();
       items = items.filter(
@@ -59,26 +86,38 @@ export class ContentService {
       );
     }
 
+    if (options?.onlyDeleted) {
+      return items.sort((a, b) => {
+        const timeA = a.deleted_at ? new Date(a.deleted_at).getTime() : 0;
+        const timeB = b.deleted_at ? new Date(b.deleted_at).getTime() : 0;
+        return timeB - timeA;
+      });
+    }
+
     return items.sort((a, b) => b.updated_at.getTime() - a.updated_at.getTime());
   }
 
   static async getById(
     workspaceId: string,
-    contentId: string
+    contentId: string,
+    options?: { allowDeleted?: boolean }
   ): Promise<DbContentItem | null> {
     if (db.isConfigured) {
-      const result = await db.query<DbContentItem>(
-        "SELECT * FROM content_items WHERE id = $1 AND workspace_id = $2",
-        [contentId, workspaceId]
-      );
+      let query = "SELECT * FROM content_items WHERE id = $1 AND workspace_id = $2";
+      if (!options?.allowDeleted) {
+        query += " AND deleted_at IS NULL";
+      }
+      const result = await db.query<DbContentItem>(query, [contentId, workspaceId]);
       return result.rows[0] || null;
     }
 
     const item = memoryContent.get(contentId);
     if (!item) return null;
     if (workspaceId && item.workspace_id !== workspaceId) {
-      // In dev fallback, allow loading if item exists
       return item;
+    }
+    if (!options?.allowDeleted && item.deleted_at) {
+      return null;
     }
     return item;
   }
@@ -229,6 +268,67 @@ export class ContentService {
 
   static async delete(
     workspaceId: string,
+    contentId: string,
+    userId?: string
+  ): Promise<boolean> {
+    return this.softDelete(workspaceId, contentId, userId);
+  }
+
+  static async softDelete(
+    workspaceId: string,
+    contentId: string,
+    userId?: string
+  ): Promise<boolean> {
+    const deletedAt = new Date();
+    const permanentDeleteAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days expiration
+
+    if (db.isConfigured) {
+      const res = await db.query(
+        `UPDATE content_items 
+         SET deleted_at = $1, deleted_by = $2, permanent_delete_at = $3, updated_at = NOW() 
+         WHERE id = $4 AND workspace_id = $5`,
+        [deletedAt, userId || null, permanentDeleteAt, contentId, workspaceId]
+      );
+      return (res.rowCount ?? 0) > 0;
+    }
+
+    const item = memoryContent.get(contentId);
+    if (!item || item.workspace_id !== workspaceId) return false;
+    item.deleted_at = deletedAt;
+    item.deleted_by = userId || "admin";
+    item.permanent_delete_at = permanentDeleteAt;
+    item.updated_at = new Date();
+    memoryContent.set(contentId, item);
+    return true;
+  }
+
+  static async restore(
+    workspaceId: string,
+    contentId: string
+  ): Promise<DbContentItem | null> {
+    if (db.isConfigured) {
+      const res = await db.query<DbContentItem>(
+        `UPDATE content_items 
+         SET deleted_at = NULL, deleted_by = NULL, permanent_delete_at = NULL, updated_at = NOW() 
+         WHERE id = $1 AND workspace_id = $2 
+         RETURNING *`,
+        [contentId, workspaceId]
+      );
+      return res.rows[0] || null;
+    }
+
+    const item = memoryContent.get(contentId);
+    if (!item || item.workspace_id !== workspaceId) return null;
+    item.deleted_at = null;
+    item.deleted_by = null;
+    item.permanent_delete_at = null;
+    item.updated_at = new Date();
+    memoryContent.set(contentId, item);
+    return item;
+  }
+
+  static async permanentDelete(
+    workspaceId: string,
     contentId: string
   ): Promise<boolean> {
     if (db.isConfigured) {
@@ -243,5 +343,54 @@ export class ContentService {
     if (!item || item.workspace_id !== workspaceId) return false;
     memoryContent.delete(contentId);
     return true;
+  }
+
+  static async emptyTrash(workspaceId: string): Promise<number> {
+    if (db.isConfigured) {
+      const res = await db.query(
+        "DELETE FROM content_items WHERE workspace_id = $1 AND deleted_at IS NOT NULL",
+        [workspaceId]
+      );
+      return res.rowCount ?? 0;
+    }
+
+    let count = 0;
+    for (const [id, item] of memoryContent.entries()) {
+      if (item.workspace_id === workspaceId && item.deleted_at) {
+        memoryContent.delete(id);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  static async cleanupExpiredTrash(workspaceId?: string): Promise<number> {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    if (db.isConfigured) {
+      let query = "DELETE FROM content_items WHERE deleted_at IS NOT NULL AND (deleted_at <= $1 OR permanent_delete_at <= NOW())";
+      const params: unknown[] = [sevenDaysAgo];
+      if (workspaceId) {
+        params.push(workspaceId);
+        query += ` AND workspace_id = $${params.length}`;
+      }
+      const res = await db.query(query, params);
+      return res.rowCount ?? 0;
+    }
+
+    let purged = 0;
+    const now = Date.now();
+    for (const [id, item] of memoryContent.entries()) {
+      if (workspaceId && item.workspace_id !== workspaceId) continue;
+      if (item.deleted_at) {
+        const delTime = new Date(item.deleted_at).getTime();
+        const permTime = item.permanent_delete_at ? new Date(item.permanent_delete_at).getTime() : delTime + 7 * 24 * 60 * 60 * 1000;
+        if (now >= permTime || now - delTime >= 7 * 24 * 60 * 60 * 1000) {
+          memoryContent.delete(id);
+          purged++;
+        }
+      }
+    }
+    return purged;
   }
 }

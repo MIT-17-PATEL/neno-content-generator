@@ -209,7 +209,7 @@ export default function BlogManagementPage() {
         method: "DELETE",
       });
       if (res.ok) {
-        showToast(`Deleted "${item.title}"`);
+        showToast(`Moved "${item.title}" to Trash (7-day recovery)`);
         setSelectedIds((prev) => prev.filter((id) => id !== item.id));
         fetchBlogs();
       }
@@ -270,7 +270,7 @@ export default function BlogManagementPage() {
       for (const id of selectedIds) {
         await fetch(`/api/admin/blogs/${id}?workspaceId=${activeWorkspace?.id}`, { method: "DELETE" });
       }
-      showToast(`${selectedIds.length} blog(s) deleted successfully`);
+      showToast(`${selectedIds.length} blog(s) moved to Trash (7-day recovery)`);
       setSelectedIds([]);
       setDeleteModalOpen(false);
       fetchBlogs();

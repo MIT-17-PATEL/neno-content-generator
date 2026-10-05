@@ -206,7 +206,7 @@ export default function CaseStudiesPage() {
         method: "DELETE",
       });
       if (res.ok) {
-        showToast(`Deleted "${item.title}"`);
+        showToast(`Moved "${item.title}" to Trash (7-day recovery)`);
         setSelectedIds((prev) => prev.filter((id) => id !== item.id));
         fetchCaseStudies();
       }
@@ -358,7 +358,7 @@ export default function CaseStudiesPage() {
       for (const id of selectedIds) {
         await fetch(`/api/admin/case-studies/${id}?workspaceId=${activeWorkspace?.id}`, { method: "DELETE" });
       }
-      showToast(`${selectedIds.length} case study(ies) deleted`);
+      showToast(`${selectedIds.length} case study(ies) moved to Trash (7-day recovery)`);
       setSelectedIds([]);
       setDeleteModalOpen(false);
       fetchCaseStudies();

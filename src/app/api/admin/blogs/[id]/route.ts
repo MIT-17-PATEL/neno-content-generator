@@ -144,14 +144,18 @@ export async function DELETE(
     return NextResponse.json({ error: "Blog not found" }, { status: 404 });
   }
 
-  // Delete from website first
+  // 1. Immediately delete / unpublish from live website
   if (item.slug) {
-    await WebsiteSyncService.deleteFromWebsite(item.slug);
+    await WebsiteSyncService.deleteFromWebsite(item.slug, item.title);
   }
-  await WebsiteSyncService.deleteFromWebsite(item.id);
+  await WebsiteSyncService.deleteFromWebsite(item.id, item.title);
 
-  // Delete from local store
-  await ContentService.delete(workspaceId, params.id);
+  // 2. Soft-delete locally into Trash (7-day recovery period)
+  await ContentService.softDelete(workspaceId, params.id, auth.user.userId);
 
-  return NextResponse.json({ success: true, message: "Blog deleted successfully" });
+  return NextResponse.json({
+    success: true,
+    message: "Blog moved to Trash (retained for 7 days)",
+    trashed: true,
+  });
 }

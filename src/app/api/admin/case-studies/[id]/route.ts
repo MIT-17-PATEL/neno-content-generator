@@ -151,13 +151,18 @@ export async function DELETE(
     return NextResponse.json({ error: "Case study not found" }, { status: 404 });
   }
 
-  // Delete from live website
+  // 1. Immediately delete from live website
   if (item.slug) {
     await WebsiteSyncService.deleteCaseStudyFromWebsite(item.slug, item.title);
   }
   await WebsiteSyncService.deleteCaseStudyFromWebsite(item.id, item.title);
 
-  // Delete from local store
-  await ContentService.delete(workspaceId, params.id);
-  return NextResponse.json({ success: true, message: "Case study deleted successfully" });
+  // 2. Soft-delete locally into Trash (7-day recovery period)
+  await ContentService.softDelete(workspaceId, params.id, auth.user.userId);
+
+  return NextResponse.json({
+    success: true,
+    message: "Case study moved to Trash (retained for 7 days)",
+    trashed: true,
+  });
 }

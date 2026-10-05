@@ -11,6 +11,7 @@ import {
   Search,
   Image as ImageIcon,
   Sliders,
+  Trash2,
   Settings,
   Sparkles,
   LogOut,
@@ -29,6 +30,7 @@ const navigation = [
   { name: "Research", href: "/research", icon: Search },
   { name: "Media", href: "/media", icon: ImageIcon },
   { name: "Templates", href: "/templates", icon: Sliders },
+  { name: "Trash", href: "/trash", icon: Trash2 },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
