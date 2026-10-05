@@ -10,6 +10,10 @@ const generateImageSchema = z.object({
   contentId: z.string().optional(),
   topic: z.string().min(2, "Topic must be at least 2 characters"),
   category: z.string().optional(),
+  summary: z.string().optional(),
+  keyConcepts: z.array(z.string()).optional(),
+  industry: z.string().optional(),
+  articleType: z.enum(["blog", "case-study", "research", "technical-guide"]).optional(),
   style: z
     .enum(["dark_tech", "minimalist_vector", "architectural_blueprint", "editorial_photo", "isometric_3d"])
     .default("dark_tech"),
@@ -32,17 +36,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { workspaceId, contentId, topic, category, style, aspectRatio, customPrompt } = parsed.data;
+    const {
+      workspaceId,
+      contentId,
+      topic,
+      category,
+      summary,
+      keyConcepts,
+      industry,
+      articleType,
+      style,
+      aspectRatio,
+      customPrompt,
+    } = parsed.data;
 
     const wsAuth = await requireWorkspaceAccess(req, workspaceId);
     if ("error" in wsAuth) return wsAuth.error;
 
     const brand = await dataStore.getBrandSettings(workspaceId);
 
-    // Generate image and prompts
+    // Generate image and semantic prompts
     const generated = await ImageGenerator.generate({
       topic,
       category,
+      summary,
+      keyConcepts,
+      industry,
+      articleType,
       style,
       aspectRatio,
       customPrompt,
@@ -68,6 +88,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       asset,
+      visualConcept: generated.visualConcept,
+      colorPalette: generated.colorPalette,
     });
   } catch (error) {
     console.error("Generate media asset error:", error);

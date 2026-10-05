@@ -20,15 +20,28 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CaseStudyOutput } from "@/validation/case-study-schema";
-
-interface GeneratedCaseStudyResult {
-  contentId: string;
-  result: CaseStudyOutput;
-  title: string;
-}
+import {
+  useBackgroundGeneration,
+  PIPELINE_STAGES_CASE_STUDY,
+} from "@/features/generation/background-generation-context";
 
 export default function CaseStudyGeneratorPage() {
   const { activeWorkspace } = useAuth();
+  const {
+    isGenerating,
+    generationType,
+    activeBatchIndex,
+    totalBatchCount,
+    currentGeneratingTitle: currentGeneratingScenario,
+    currentStepIndex,
+    pipelineStages,
+    errorMessage: bgErrorMessage,
+    caseStudyResults: batchResults,
+    startCaseStudyBatchGeneration,
+    clearGenerationResults,
+  } = useBackgroundGeneration();
+
+  const isCurrentCaseStudyGenerating = isGenerating && generationType === "case-study";
 
   // Mode: "single" | "batch"
   const [generationMode, setGenerationMode] = useState<"single" | "batch">("single");
@@ -55,14 +68,6 @@ export default function CaseStudyGeneratorPage() {
     `Financial Services & Lending | Severe P99 latency spikes during flash transactions | Re-architected state mutations into an event-driven stream | Kafka, Go, Kubernetes | Reduced P99 latency by 92.5%\nHealthcare Telemetry & IoT | Real-time sensor synchronization failures | Edge-computed streaming event mesh | Rust, WebSockets, TimescaleDB | 99.999% uptime\nSupply Chain & Logistics | Non-deterministic route optimization | Multi-agent reasoning graph | Python, Ray, PostgreSQL | 34% fuel efficiency gain`
   );
 
-  // Execution & Progress State
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [activeBatchIndex, setActiveBatchIndex] = useState(0);
-  const [totalBatchCount, setTotalBatchCount] = useState(0);
-  const [currentGeneratingScenario, setCurrentGeneratingScenario] = useState("");
-
-  // Completed Results
-  const [batchResults, setBatchResults] = useState<GeneratedCaseStudyResult[]>([]);
   const [errorMessage, setErrorMessage] = useState("");
 
   const loadBrandDefaults = useCallback(async () => {
@@ -143,63 +148,16 @@ export default function CaseStudyGeneratorPage() {
     e.preventDefault();
     if (!activeWorkspace || parsedBatchItems.length === 0) return;
 
-    setIsGenerating(true);
     setErrorMessage("");
-    setBatchResults([]);
-    setTotalBatchCount(parsedBatchItems.length);
-
-    const completed: GeneratedCaseStudyResult[] = [];
-
-    try {
-      for (let i = 0; i < parsedBatchItems.length; i++) {
-        const item = parsedBatchItems[i];
-        setActiveBatchIndex(i + 1);
-        setCurrentGeneratingScenario(item.industry);
-
-        try {
-          const res = await fetch("/api/generation/case-study", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              workspaceId: activeWorkspace.id,
-              clientIndustry: item.industry,
-              businessChallenge: item.challenge,
-              existingProcess: existingProcess || "Synchronous monolithic database calls and manual triage.",
-              proposedSolution: item.solution,
-              technology: item.tech,
-              resultsMetrics: item.metrics,
-              targetAudience,
-              autoGenerateImage,
-              customImagePrompt: customImagePrompt.trim() || undefined,
-              imageStyle,
-            }),
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            completed.push({
-              contentId: data.contentId,
-              result: data.result,
-              title: data.result.title,
-            });
-            setBatchResults([...completed]);
-          } else {
-            const errData = await res.json();
-            console.error(`Error generating case study for "${item.industry}":`, errData);
-          }
-        } catch (err) {
-          console.error(`Failed generating scenario "${item.industry}":`, err);
-        }
-      }
-
-      if (completed.length === 0) {
-        setErrorMessage("Case study generation encountered an error. Please verify network and parameters.");
-      }
-    } catch {
-      setErrorMessage("Network error during case study execution");
-    } finally {
-      setIsGenerating(false);
-    }
+    await startCaseStudyBatchGeneration({
+      workspaceId: activeWorkspace.id,
+      items: parsedBatchItems,
+      clientIndustry,
+      targetAudience,
+      autoGenerateImage,
+      customImagePrompt: customImagePrompt.trim() || undefined,
+      imageStyle,
+    });
   };
 
   const handleLoadSampleBatch = () => {
@@ -207,6 +165,9 @@ export default function CaseStudyGeneratorPage() {
       `Financial Services & Lending | Severe P99 latency spikes during flash transactions | Re-architected state mutations into an event-driven stream with autonomous circuit breakers | Kafka, Go, Kubernetes | Reduced P99 latency by 92.5%, increased throughput to 26,000 RPS\nHealthcare Telemetry & Medical Devices | Real-time sensor synchronization failures and delayed alerting | Edge-computed streaming event mesh with guaranteed delivery | Rust, WebSockets, TimescaleDB | 99.999% uptime and zero missed alerts across 1.2M devices\nAutonomous Supply Chain & Logistics | Non-deterministic route optimization under peak global shipping | Multi-agent reasoning graph with continuous telemetry feedback | Python, Ray, PostgreSQL | 34% fuel efficiency gain, 4.2x routing dispatch velocity`
     );
   };
+
+  const activeErrorMessage = errorMessage || bgErrorMessage;
+  const stages = pipelineStages && pipelineStages.length > 0 ? pipelineStages : PIPELINE_STAGES_CASE_STUDY;
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -230,7 +191,7 @@ export default function CaseStudyGeneratorPage() {
         </div>
 
         {/* Mode Selector */}
-        {!isGenerating && (
+        {!isCurrentCaseStudyGenerating && (
           <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
             <button
               type="button"
@@ -263,15 +224,15 @@ export default function CaseStudyGeneratorPage() {
         )}
       </div>
 
-      {errorMessage && (
+      {activeErrorMessage && (
         <div className="p-3.5 rounded-md bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2.5">
           <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
-          <span>{errorMessage}</span>
+          <span>{activeErrorMessage}</span>
         </div>
       )}
 
       {/* Progress State */}
-      {isGenerating && (
+      {isCurrentCaseStudyGenerating && (
         <Card className="p-6 border border-orange-200 bg-orange-50/40 space-y-4">
           <div className="max-w-md mx-auto text-center space-y-3">
             <div className="flex items-center justify-center gap-2 text-orange-700 font-semibold text-sm">
@@ -283,29 +244,43 @@ export default function CaseStudyGeneratorPage() {
               </span>
             </div>
 
-            <div className="text-xs font-medium text-slate-900 truncate px-4">
+            <div className="text-xs font-bold text-slate-900 truncate px-4">
               &ldquo;{currentGeneratingScenario}&rdquo;
             </div>
 
-            <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+            <p className="text-xs text-slate-600 font-medium">
+              {stages[currentStepIndex]}
+            </p>
+
+            <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden shadow-inner">
               <div
                 className="bg-orange-500 h-full transition-all duration-500 rounded-full"
                 style={{
-                  width: `${((activeBatchIndex) / totalBatchCount) * 100}%`,
+                  width: `${
+                    totalBatchCount > 1
+                      ? ((activeBatchIndex - 1 + (currentStepIndex + 1) / stages.length) /
+                          totalBatchCount) *
+                        100
+                      : ((currentStepIndex + 1) / stages.length) * 100
+                  }%`,
                 }}
               />
             </div>
-            {totalBatchCount > 1 && (
-              <p className="text-[11px] text-slate-500">
+
+            <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium pt-1">
+              <span>
                 {batchResults.length} of {totalBatchCount} case studies completed
-              </p>
-            )}
+              </span>
+              <span className="text-orange-700 font-medium">
+                Runs continuously in background if you leave page
+              </span>
+            </div>
           </div>
         </Card>
       )}
 
       {/* Generated Result Output Banner */}
-      {!isGenerating && batchResults.length > 0 && (
+      {!isCurrentCaseStudyGenerating && batchResults.length > 0 && (
         <Card className="border border-emerald-200 bg-emerald-50/40 p-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-200/60 pb-3">
             <div className="flex items-center gap-2.5">
@@ -322,11 +297,21 @@ export default function CaseStudyGeneratorPage() {
               </div>
             </div>
 
-            <Link href="/content">
-              <Button variant="outline" size="sm" className="text-xs h-8 bg-white border-slate-200">
-                View in Content Library
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={clearGenerationResults}
+                className="text-xs h-8 bg-white border-slate-200 text-slate-600"
+              >
+                Start New Run
               </Button>
-            </Link>
+              <Link href="/content">
+                <Button variant="primary" size="sm" className="text-xs h-8">
+                  View in Content Library
+                </Button>
+              </Link>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -395,7 +380,7 @@ export default function CaseStudyGeneratorPage() {
       )}
 
       {/* Main Form */}
-      {!isGenerating && (
+      {!isCurrentCaseStudyGenerating && (
         <form onSubmit={handleStartGeneration} className="space-y-5">
           {generationMode === "single" ? (
             <>

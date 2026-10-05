@@ -14,6 +14,9 @@ import {
   Plus,
   Image as ImageIcon,
   Zap,
+  TrendingUp,
+  RefreshCw,
+  Globe,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/auth-context";
 import { Card } from "@/components/ui/card";
@@ -23,24 +26,28 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { BlogGenerationOutput } from "@/validation/blog-schema";
 import { AISignalGame, ContentStudioTip } from "@/components/content/ai-signal-game";
-
-const PIPELINE_STAGES = [
-  "Initializing Generation Run & Brand Profile",
-  "Research: Retrieving Grounded Citations & Benchmarks",
-  "Strategy: Formulating Structure Outline & Key Points",
-  "Writing: Drafting Full-Length Technical Article",
-  "SEO: Optimizing Keywords & Meta Descriptions",
-  "QA: Verifying Brand Rules & Formatting",
-];
-
-interface GeneratedBlogResult {
-  contentId: string;
-  result: BlogGenerationOutput;
-  topic: string;
-}
+import {
+  useBackgroundGeneration,
+  PIPELINE_STAGES_BLOG,
+} from "@/features/generation/background-generation-context";
 
 export default function BlogGeneratorPage() {
   const { activeWorkspace } = useAuth();
+  const {
+    isGenerating,
+    generationType,
+    activeBatchIndex,
+    totalBatchCount,
+    currentGeneratingTitle,
+    currentStepIndex,
+    pipelineStages,
+    errorMessage: bgErrorMessage,
+    blogResults: batchResults,
+    startBlogBatchGeneration,
+    clearGenerationResults,
+  } = useBackgroundGeneration();
+
+  const isCurrentBlogGenerating = isGenerating && generationType === "blog";
 
   // Mode: "single" | "batch"
   const [generationMode, setGenerationMode] = useState<"single" | "batch">("single");
@@ -64,17 +71,10 @@ export default function BlogGeneratorPage() {
     "dark_tech" | "isometric_3d" | "minimalist_vector" | "architectural_blueprint" | "editorial_photo"
   >("dark_tech");
 
-  // Execution & Progress State
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [activeBatchIndex, setActiveBatchIndex] = useState(0);
-  const [totalBatchCount, setTotalBatchCount] = useState(0);
-  const [currentGeneratingTitle, setCurrentGeneratingTitle] = useState("");
-
-  // Completed Results
-  const [batchResults, setBatchResults] = useState<GeneratedBlogResult[]>([]);
   const [errorMessage, setErrorMessage] = useState("");
   const [showGamePreview, setShowGamePreview] = useState(false);
+  const [isFetchingTopics, setIsFetchingTopics] = useState(false);
+  const [trendingSource, setTrendingSource] = useState<string | null>(null);
 
   const loadBrandDefaults = useCallback(async () => {
     if (!activeWorkspace) return;
@@ -98,8 +98,8 @@ export default function BlogGeneratorPage() {
     loadBrandDefaults();
   }, [loadBrandDefaults]);
 
-  // Curated ideas catalog for auto-generating up to 10 tailored topics
-  const CURATED_IDEAS = [
+  // Fallback curated tech topics if offline
+  const FALLBACK_IDEAS = [
     "Designing Zero-Trust Architecture for Microservices in Kubernetes",
     "Autonomous Multi-Agent Orchestration Patterns in High-Throughput Fintech",
     "Event-Driven Microfrontends: Real-World Latency Benchmarks and ROI",
@@ -112,11 +112,58 @@ export default function BlogGeneratorPage() {
     "Automated Model Governance & Compliance in Regulated Enterprise AI",
   ];
 
-  const handleGenerateTopicIdeas = (count: number) => {
+  // Fetch real-time trending topics from live tech feeds & AI synthesis
+  const handleFetchTrendingTopics = async (count: number = 5, isSingle: boolean = false) => {
     const targetCount = Math.max(1, Math.min(10, count));
-    setBatchCount(targetCount);
-    const selected = CURATED_IDEAS.slice(0, targetCount);
-    setBatchTopicsText(selected.join("\n"));
+    setIsFetchingTopics(true);
+    try {
+      const res = await fetch("/api/topics/trending", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category,
+          count: isSingle ? 1 : targetCount,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.topics && Array.isArray(data.topics) && data.topics.length > 0) {
+          if (isSingle) {
+            setTopic(data.topics[0]);
+          } else {
+            setBatchCount(data.topics.length);
+            setBatchTopicsText(data.topics.join("\n"));
+          }
+          setTrendingSource(
+            data.source === "live_internet_trending"
+              ? "Live Internet Tech Discussions"
+              : data.source === "live_ai_synthesis"
+              ? "AI Tech Radar Synthesis"
+              : "Dynamic Knowledge Bank"
+          );
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to fetch live trending topics from endpoint, using dynamic shuffle fallback:", err);
+    } finally {
+      setIsFetchingTopics(false);
+    }
+
+    // Dynamic shuffle fallback
+    const shuffled = [...FALLBACK_IDEAS].sort(() => 0.5 - Math.random());
+    if (isSingle) {
+      setTopic(shuffled[0]);
+    } else {
+      setBatchCount(targetCount);
+      setBatchTopicsText(shuffled.slice(0, targetCount).join("\n"));
+    }
+    setTrendingSource("Dynamic Knowledge Bank");
+  };
+
+  const handleGenerateTopicIdeas = (count: number) => {
+    handleFetchTrendingTopics(count, false);
   };
 
   // Extract parsed topics list (capped at maximum 10)
@@ -135,76 +182,23 @@ export default function BlogGeneratorPage() {
     e.preventDefault();
     if (!activeWorkspace || parsedTopics.length === 0) return;
 
-    setIsGenerating(true);
     setErrorMessage("");
-    setBatchResults([]);
-    setTotalBatchCount(parsedTopics.length);
-
-    const completed: GeneratedBlogResult[] = [];
-
-    const interval = setInterval(() => {
-      setCurrentStepIndex((prev) => {
-        if (prev < PIPELINE_STAGES.length - 1) return prev + 1;
-        return 0;
-      });
-    }, 1400);
-
-    try {
-      for (let i = 0; i < parsedTopics.length; i++) {
-        const currentTopic = parsedTopics[i];
-        setActiveBatchIndex(i + 1);
-        setCurrentGeneratingTitle(currentTopic);
-        setCurrentStepIndex(0);
-
-        try {
-          const res = await fetch("/api/generation/blog", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              workspaceId: activeWorkspace.id,
-              topic: currentTopic,
-              audience: audience || "CTOs, Engineering Leaders, Tech Founders",
-              tone: tone || "Authoritative, insightful, modern, highly articulate",
-              desiredLength,
-              category: category || "Enterprise AI & Cloud Engineering",
-              researchPreference,
-              autoGenerateImage,
-              customImagePrompt: customImagePrompt.trim() || undefined,
-              imageStyle,
-            }),
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            completed.push({
-              contentId: data.contentId,
-              result: data.result,
-              topic: currentTopic,
-            });
-            setBatchResults([...completed]);
-          } else {
-            const errData = await res.json();
-            console.error(`Error generating "${currentTopic}":`, errData);
-          }
-        } catch (err) {
-          console.error(`Failed to generate topic "${currentTopic}":`, err);
-        }
-      }
-
-      if (completed.length === 0) {
-        setErrorMessage("Generation failed for all requested topics. Please check your network or API keys.");
-      }
-    } catch {
-      setErrorMessage("Network error during generation execution");
-    } finally {
-      clearInterval(interval);
-      setIsGenerating(false);
-    }
+    await startBlogBatchGeneration({
+      workspaceId: activeWorkspace.id,
+      topics: parsedTopics,
+      audience: audience || "CTOs, Engineering Leaders, Tech Founders",
+      tone: tone || "Authoritative, insightful, modern, highly articulate",
+      desiredLength,
+      category: category || "Enterprise AI & Cloud Engineering",
+      researchPreference,
+      autoGenerateImage,
+      customImagePrompt: customImagePrompt.trim() || undefined,
+      imageStyle,
+    });
   };
 
-  const handleLoadSampleBatch = () => {
-    handleGenerateTopicIdeas(3);
-  };
+  const activeErrorMessage = errorMessage || bgErrorMessage;
+  const stages = pipelineStages && pipelineStages.length > 0 ? pipelineStages : PIPELINE_STAGES_BLOG;
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -228,7 +222,7 @@ export default function BlogGeneratorPage() {
         </div>
 
         {/* Mode Selector & AI Signal Preview */}
-        {!isGenerating && (
+        {!isCurrentBlogGenerating && (
           <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
@@ -277,22 +271,22 @@ export default function BlogGeneratorPage() {
       </div>
 
       {/* AI Signal Interactive Area (when toggled on or during generation) */}
-      {!isGenerating && showGamePreview && (
+      {!isCurrentBlogGenerating && showGamePreview && (
         <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-4 animate-in fade-in duration-200">
           <AISignalGame />
           <ContentStudioTip />
         </div>
       )}
 
-      {errorMessage && (
+      {activeErrorMessage && (
         <div className="p-3.5 rounded-md bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2.5">
           <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
-          <span>{errorMessage}</span>
+          <span>{activeErrorMessage}</span>
         </div>
       )}
 
       {/* Real-time Progress State with Interactive AI Signal Waiting Experience */}
-      {isGenerating && (
+      {isCurrentBlogGenerating && (
         <div className="space-y-5 animate-in fade-in duration-300">
           {/* 1. Generation Status Card */}
           <Card className="p-6 border border-orange-200 bg-orange-50/40 shadow-sm space-y-4">
@@ -311,7 +305,7 @@ export default function BlogGeneratorPage() {
               </div>
 
               <p className="text-xs text-slate-600 font-medium">
-                {PIPELINE_STAGES[currentStepIndex]}
+                {stages[currentStepIndex]}
               </p>
 
               <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden shadow-inner">
@@ -320,20 +314,23 @@ export default function BlogGeneratorPage() {
                   style={{
                     width: `${
                       totalBatchCount > 1
-                        ? ((activeBatchIndex - 1 + (currentStepIndex + 1) / PIPELINE_STAGES.length) /
+                        ? ((activeBatchIndex - 1 + (currentStepIndex + 1) / stages.length) /
                             totalBatchCount) *
                           100
-                        : ((currentStepIndex + 1) / PIPELINE_STAGES.length) * 100
+                        : ((currentStepIndex + 1) / stages.length) * 100
                     }%`,
                   }}
                 />
               </div>
 
-              {totalBatchCount > 1 && (
-                <p className="text-[11px] text-slate-500 font-medium">
+              <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium pt-1">
+                <span>
                   {batchResults.length} of {totalBatchCount} articles finished
-                </p>
-              )}
+                </span>
+                <span className="text-orange-700 font-medium">
+                  Runs continuously in background if you leave page
+                </span>
+              </div>
             </div>
           </Card>
 
@@ -346,7 +343,7 @@ export default function BlogGeneratorPage() {
       )}
 
       {/* Generation Complete Output Banner */}
-      {!isGenerating && batchResults.length > 0 && (
+      {!isCurrentBlogGenerating && batchResults.length > 0 && (
         <Card className="border border-emerald-200 bg-emerald-50/40 p-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-200/60 pb-3">
             <div className="flex items-center gap-2.5">
@@ -363,11 +360,21 @@ export default function BlogGeneratorPage() {
               </div>
             </div>
 
-            <Link href="/content">
-              <Button variant="outline" size="sm" className="text-xs h-8 bg-white border-slate-200">
-                View in Content Library
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={clearGenerationResults}
+                className="text-xs h-8 bg-white border-slate-200 text-slate-600"
+              >
+                Start New Run
               </Button>
-            </Link>
+              <Link href="/content">
+                <Button variant="primary" size="sm" className="text-xs h-8">
+                  View in Content Library
+                </Button>
+              </Link>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -441,29 +448,54 @@ export default function BlogGeneratorPage() {
       )}
 
       {/* Main Generation Form */}
-      {!isGenerating && (
+      {!isCurrentBlogGenerating && (
         <form onSubmit={handleStartGeneration} className="space-y-5">
           <Card className="p-5 space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <h3 className="text-sm font-semibold text-slate-900">
-                  {generationMode === "batch" ? "Batch Topics (Bulk Queue)" : "Article Topic"}
+                <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                  <span>{generationMode === "batch" ? "Batch Topics (Bulk Queue)" : "Article Topic"}</span>
+                  {trendingSource && (
+                    <Badge variant="outline" className="text-[10px] py-0 px-2 border-orange-200 bg-orange-50 text-orange-700 font-medium flex items-center gap-1">
+                      <Globe className="h-2.5 w-2.5" />
+                      <span>{trendingSource}</span>
+                    </Badge>
+                  )}
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {generationMode === "batch"
-                    ? "Choose how many articles to generate in one run (up to 10), or customize topics below."
-                    : "Specify the primary topic and target category"}
+                    ? "Choose how many articles to generate in one run (up to 10), or pull live tech trends below."
+                    : "Specify the primary topic or pull the latest breakthrough from the tech world"}
                 </p>
               </div>
 
-              {generationMode === "batch" && (
+              {generationMode === "batch" ? (
                 <button
                   type="button"
-                  onClick={() => handleGenerateTopicIdeas(batchCount || 5)}
-                  className="text-xs text-orange-600 hover:text-orange-700 font-medium flex items-center gap-1 bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-md border border-orange-200 transition-colors"
+                  disabled={isFetchingTopics}
+                  onClick={() => handleFetchTrendingTopics(batchCount || 5, false)}
+                  className="text-xs text-orange-600 hover:text-orange-700 font-semibold flex items-center gap-1.5 bg-orange-50 hover:bg-orange-100 disabled:opacity-50 px-3 py-1.5 rounded-md border border-orange-200 transition-colors shadow-sm"
                 >
-                  <Sparkles className="h-3 w-3" />
-                  <span>Auto-Generate {batchCount || 5} Ideas</span>
+                  {isFetchingTopics ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin text-orange-600" />
+                  ) : (
+                    <TrendingUp className="h-3.5 w-3.5 text-orange-600" />
+                  )}
+                  <span>{isFetchingTopics ? "Fetching Live Tech Trends..." : `Pull ${batchCount || 5} Live Trends`}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={isFetchingTopics}
+                  onClick={() => handleFetchTrendingTopics(1, true)}
+                  className="text-xs text-orange-600 hover:text-orange-700 font-semibold flex items-center gap-1.5 bg-orange-50 hover:bg-orange-100 disabled:opacity-50 px-3 py-1.5 rounded-md border border-orange-200 transition-colors shadow-sm"
+                >
+                  {isFetchingTopics ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin text-orange-600" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5 text-orange-600" />
+                  )}
+                  <span>{isFetchingTopics ? "Synthesizing..." : "⚡ Suggest Live Tech Trend"}</span>
                 </button>
               )}
             </div>
@@ -495,12 +527,13 @@ export default function BlogGeneratorPage() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[11px] text-slate-500 font-medium mr-1">Quick Select:</span>
+                    <span className="text-[11px] text-slate-500 font-medium mr-1">Quick Select &amp; Live Trend Fill:</span>
                     {[2, 3, 5, 8, 10].map((num) => (
                       <button
                         key={num}
                         type="button"
-                        onClick={() => handleGenerateTopicIdeas(num)}
+                        disabled={isFetchingTopics}
+                        onClick={() => handleFetchTrendingTopics(num, false)}
                         className={`h-7 px-3 text-xs font-semibold rounded-md border transition-all ${
                           batchCount === num && parsedTopics.length === num
                             ? "bg-orange-600 text-white border-orange-600 shadow-sm"

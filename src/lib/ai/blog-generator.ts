@@ -388,11 +388,15 @@ This architecture delivers clear returns for teams with independent deployment v
     if (params.autoGenerateImage !== false) {
       try {
         const imageResult = await ImageGenerator.generate({
-          topic: params.topic,
+          topic: validatedOutput.title || params.topic,
+          summary: validatedOutput.shortDescription || validatedOutput.excerpt,
           category: validatedOutput.category || params.category,
+          keyConcepts: validatedOutput.seo?.keywords || [],
+          industry: "Enterprise AI & Architecture",
+          articleType: "blog",
           style: params.imageStyle || "dark_tech",
           aspectRatio: "16:9",
-          customPrompt: params.customImagePrompt || validatedOutput.featuredImage.prompt,
+          customPrompt: params.customImagePrompt || validatedOutput.featuredImage?.prompt,
           brandName,
         });
 

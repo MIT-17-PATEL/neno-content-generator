@@ -260,11 +260,20 @@ By combining **${techArray.join(", ")}** with disciplined architectural patterns
     if (params.autoGenerateImage !== false) {
       try {
         const imageResult = await ImageGenerator.generate({
-          topic: `${params.clientIndustry} Case Study: ${validatedOutput.title}`,
+          topic: validatedOutput.title || `${params.clientIndustry} Case Study: ${params.technology}`,
+          summary: validatedOutput.description || validatedOutput.excerpt,
           category: validatedOutput.category || params.clientIndustry,
+          keyConcepts: [
+            params.clientIndustry,
+            params.technology,
+            params.resultsMetrics || "Enterprise Scalability",
+            ...(validatedOutput.seo?.keywords || []),
+          ],
+          industry: params.clientIndustry,
+          articleType: "case-study",
           style: params.imageStyle || "isometric_3d",
           aspectRatio: "16:9",
-          customPrompt: params.customImagePrompt || validatedOutput.featuredVisual.prompt,
+          customPrompt: params.customImagePrompt || validatedOutput.featuredVisual?.prompt,
           brandName,
         });
 
