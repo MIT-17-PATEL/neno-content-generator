@@ -56,6 +56,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ContentItem } from "@/types";
+import { BulkActionModal, BulkActionMode, BulkItem } from "@/components/ui/bulk-action-modal";
 
 interface CaseStudyStats {
   total: number;
@@ -82,9 +83,12 @@ export default function CaseStudiesPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isProcessingBulk, setIsProcessingBulk] = useState(false);
 
+  // Bulk Action Modal State
+  const [actionModalOpen, setActionModalOpen] = useState(false);
+  const [actionModalMode, setActionModalMode] = useState<BulkActionMode>("trash");
+  const [itemsToAction, setItemsToAction] = useState<BulkItem[]>([]);
+
   // Modals & Feedback
-  const [publishModalOpen, setPublishModalOpen] = useState(false);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [websiteModalOpen, setWebsiteModalOpen] = useState(false);
   const [websiteCaseStudies, setWebsiteCaseStudies] = useState<Array<{ id: string; slug: string; title: string; clientName?: string; industry?: string }>>([]);
   const [isLoadingWebsiteCaseStudies, setIsLoadingWebsiteCaseStudies] = useState(false);
@@ -197,22 +201,10 @@ export default function CaseStudiesPage() {
     }
   };
 
-  const handleSingleDelete = async (item: ContentItem) => {
-    if (!confirm(`Are you sure you want to delete "${item.title}"?\n\nThis will also remove it from the live website.`)) {
-      return;
-    }
-    try {
-      const res = await fetch(`/api/admin/case-studies/${item.id}?workspaceId=${activeWorkspace?.id}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        showToast(`Moved "${item.title}" to Trash (7-day recovery)`);
-        setSelectedIds((prev) => prev.filter((id) => id !== item.id));
-        fetchCaseStudies();
-      }
-    } catch {
-      showToast("Failed to delete case study", "error");
-    }
+  const handleSingleDelete = (item: ContentItem) => {
+    setItemsToAction([item]);
+    setActionModalMode("trash");
+    setActionModalOpen(true);
   };
 
   const fetchWebsiteCaseStudies = async () => {
@@ -310,25 +302,21 @@ export default function CaseStudiesPage() {
   };
 
   // Bulk Actions
-  const handleBulkPublishConfirm = async () => {
-    setIsProcessingBulk(true);
-    try {
-      const res = await fetch("/api/admin/case-studies/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId: activeWorkspace?.id, ids: selectedIds }),
-      });
-      if (res.ok) {
-        showToast(`${selectedIds.length} case study(ies) published!`);
-        setSelectedIds([]);
-        setPublishModalOpen(false);
-        fetchCaseStudies();
-      }
-    } catch {
-      showToast("Error publishing case studies", "error");
-    } finally {
-      setIsProcessingBulk(false);
-    }
+  // Bulk Action Openers
+  const handleOpenBulkDelete = () => {
+    const selected = items.filter((it) => selectedIds.includes(it.id));
+    if (selected.length === 0) return;
+    setItemsToAction(selected);
+    setActionModalMode("trash");
+    setActionModalOpen(true);
+  };
+
+  const handleOpenBulkPublish = () => {
+    const selected = items.filter((it) => selectedIds.includes(it.id));
+    if (selected.length === 0) return;
+    setItemsToAction(selected);
+    setActionModalMode("publish");
+    setActionModalOpen(true);
   };
 
   const handleBulkUnpublish = async () => {
@@ -352,20 +340,24 @@ export default function CaseStudiesPage() {
     }
   };
 
-  const handleBulkDeleteConfirm = async () => {
-    setIsProcessingBulk(true);
-    try {
-      for (const id of selectedIds) {
-        await fetch(`/api/admin/case-studies/${id}?workspaceId=${activeWorkspace?.id}`, { method: "DELETE" });
-      }
-      showToast(`${selectedIds.length} case study(ies) moved to Trash (7-day recovery)`);
-      setSelectedIds([]);
-      setDeleteModalOpen(false);
-      fetchCaseStudies();
-    } catch {
-      showToast("Failed to delete case studies", "error");
-    } finally {
-      setIsProcessingBulk(false);
+  // Item Processor for BulkActionModal
+  const handleProcessActionItem = async (it: BulkItem) => {
+    if (actionModalMode === "trash") {
+      const res = await fetch(`/api/admin/case-studies/${it.id}?workspaceId=${activeWorkspace?.id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) return { success: true };
+      const data = await res.json().catch(() => ({}));
+      return { success: false, error: data.error || "Unable to update this item." };
+    } else {
+      const res = await fetch("/api/admin/case-studies/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId: activeWorkspace?.id, id: it.id }),
+      });
+      if (res.ok) return { success: true };
+      const data = await res.json().catch(() => ({}));
+      return { success: false, error: data.error || "Unable to publish this item." };
     }
   };
 
@@ -433,7 +425,7 @@ export default function CaseStudiesPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setPublishModalOpen(true)}
+              onClick={handleOpenBulkPublish}
               className="gap-1.5 h-9 text-xs font-semibold border-orange-300 text-orange-700 bg-orange-50 hover:bg-orange-100"
             >
               <Send className="h-3.5 w-3.5" />
@@ -567,7 +559,7 @@ export default function CaseStudiesPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setPublishModalOpen(true)}
+              onClick={handleOpenBulkPublish}
               disabled={isProcessingBulk}
               className="h-7 text-xs bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700 hover:text-white"
             >
@@ -586,7 +578,7 @@ export default function CaseStudiesPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setDeleteModalOpen(true)}
+              onClick={handleOpenBulkDelete}
               disabled={isProcessingBulk}
               className="h-7 text-xs bg-rose-950 border-rose-800 text-rose-200 hover:bg-rose-900 hover:text-white"
             >
@@ -762,93 +754,19 @@ export default function CaseStudiesPage() {
         </CardContent>
       </Card>
 
-      {/* Bulk Publish Modal */}
-      <Dialog open={publishModalOpen} onOpenChange={setPublishModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-900">
-              Publish Case Studies
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              You are about to publish {selectedIds.length} case study(ies) to the live website.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="max-h-48 overflow-y-auto space-y-1.5 p-2 bg-slate-50 rounded border border-slate-200 text-xs">
-            {selectedItems.map((it) => (
-              <div key={it.id} className="flex items-center gap-2 text-slate-700 py-1">
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                <span className="truncate font-medium">{it.title}</span>
-              </div>
-            ))}
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPublishModalOpen(false)}
-              disabled={isProcessingBulk}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleBulkPublishConfirm}
-              disabled={isProcessingBulk}
-              className="gap-1.5 font-semibold bg-orange-600 hover:bg-orange-700"
-            >
-              {isProcessingBulk ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-              <span>Publish {selectedIds.length} Case Study(ies)</span>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Bulk Delete Modal */}
-      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-rose-900">
-              Delete Selected Case Studies
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              Are you sure you want to delete {selectedIds.length} selected case study(ies)?
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="max-h-48 overflow-y-auto space-y-1.5 p-2 bg-rose-50 rounded border border-rose-200 text-xs text-rose-800">
-            {selectedItems.map((it) => (
-              <div key={it.id} className="flex items-center gap-2 py-1">
-                <Trash2 className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-                <span className="truncate font-medium">{it.title}</span>
-              </div>
-            ))}
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDeleteModalOpen(false)}
-              disabled={isProcessingBulk}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleBulkDeleteConfirm}
-              disabled={isProcessingBulk}
-              className="gap-1.5 font-semibold"
-            >
-              {isProcessingBulk ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-              <span>Delete {selectedIds.length} Item(s)</span>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Bulk Action & Delete Modal */}
+      <BulkActionModal
+        open={actionModalOpen}
+        onOpenChange={setActionModalOpen}
+        mode={actionModalMode}
+        items={itemsToAction}
+        itemTypeLabel="case study"
+        onProcessItem={handleProcessActionItem}
+        onCompleted={() => {
+          setSelectedIds([]);
+          fetchCaseStudies();
+        }}
+      />
 
       {/* Website Sync & Management Modal */}
       <Dialog open={websiteModalOpen} onOpenChange={setWebsiteModalOpen}>

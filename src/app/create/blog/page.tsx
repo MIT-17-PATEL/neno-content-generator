@@ -13,6 +13,7 @@ import {
   FileText,
   Plus,
   Image as ImageIcon,
+  Zap,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/auth-context";
 import { Card } from "@/components/ui/card";
@@ -21,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { BlogGenerationOutput } from "@/validation/blog-schema";
+import { AISignalGame, ContentStudioTip } from "@/components/content/ai-signal-game";
 
 const PIPELINE_STAGES = [
   "Initializing Generation Run & Brand Profile",
@@ -72,6 +74,7 @@ export default function BlogGeneratorPage() {
   // Completed Results
   const [batchResults, setBatchResults] = useState<GeneratedBlogResult[]>([]);
   const [errorMessage, setErrorMessage] = useState("");
+  const [showGamePreview, setShowGamePreview] = useState(false);
 
   const loadBrandDefaults = useCallback(async () => {
     if (!activeWorkspace) return;
@@ -224,39 +227,62 @@ export default function BlogGeneratorPage() {
           </div>
         </div>
 
-        {/* Mode Selector */}
+        {/* Mode Selector & AI Signal Preview */}
         {!isGenerating && (
-          <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
-              onClick={() => setGenerationMode("single")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                generationMode === "single"
-                  ? "bg-white text-slate-900 shadow-sm border border-slate-200/80"
-                  : "text-slate-600 hover:text-slate-900"
+              onClick={() => setShowGamePreview(!showGamePreview)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border transition-all ${
+                showGamePreview
+                  ? "bg-orange-600 text-white border-orange-600 shadow-sm"
+                  : "bg-white text-slate-700 border-slate-200 hover:border-orange-300 hover:text-orange-600"
               }`}
             >
-              <FileText className="h-3.5 w-3.5" />
-              <span>Single Article</span>
+              <Zap className="h-3.5 w-3.5 text-orange-500" />
+              <span>{showGamePreview ? "Close AI Signal" : "Play AI Signal"}</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setGenerationMode("batch")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                generationMode === "batch"
-                  ? "bg-white text-slate-900 shadow-sm border border-slate-200/80"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <Layers className="h-3.5 w-3.5 text-orange-600" />
-              <span>Batch Generator</span>
-              <Badge variant="outline" className="text-[10px] py-0 px-1 border-orange-200 text-orange-700 bg-orange-50">
-                Bulk
-              </Badge>
-            </button>
+
+            <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setGenerationMode("single")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                  generationMode === "single"
+                    ? "bg-white text-slate-900 shadow-sm border border-slate-200/80"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <FileText className="h-3.5 w-3.5" />
+                <span>Single Article</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setGenerationMode("batch")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                  generationMode === "batch"
+                    ? "bg-white text-slate-900 shadow-sm border border-slate-200/80"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <Layers className="h-3.5 w-3.5 text-orange-600" />
+                <span>Batch Generator</span>
+                <Badge variant="outline" className="text-[10px] py-0 px-1 border-orange-200 text-orange-700 bg-orange-50">
+                  Bulk
+                </Badge>
+              </button>
+            </div>
           </div>
         )}
       </div>
+
+      {/* AI Signal Interactive Area (when toggled on or during generation) */}
+      {!isGenerating && showGamePreview && (
+        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-4 animate-in fade-in duration-200">
+          <AISignalGame />
+          <ContentStudioTip />
+        </div>
+      )}
 
       {errorMessage && (
         <div className="p-3.5 rounded-md bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2.5">
@@ -265,48 +291,58 @@ export default function BlogGeneratorPage() {
         </div>
       )}
 
-      {/* Real-time Progress State */}
+      {/* Real-time Progress State with Interactive AI Signal Waiting Experience */}
       {isGenerating && (
-        <Card className="p-6 border border-orange-200 bg-orange-50/40 space-y-4">
-          <div className="max-w-md mx-auto text-center space-y-3">
-            <div className="flex items-center justify-center gap-2 text-orange-700 font-semibold text-sm">
-              <Loader2 className="h-4 w-4 animate-spin text-orange-600" />
-              <span>
-                {totalBatchCount > 1
-                  ? `Generating Article ${activeBatchIndex} of ${totalBatchCount}`
-                  : "Generating Content"}
-              </span>
-            </div>
+        <div className="space-y-5 animate-in fade-in duration-300">
+          {/* 1. Generation Status Card */}
+          <Card className="p-6 border border-orange-200 bg-orange-50/40 shadow-sm space-y-4">
+            <div className="max-w-md mx-auto text-center space-y-3">
+              <div className="flex items-center justify-center gap-2 text-orange-700 font-semibold text-sm">
+                <Loader2 className="h-4 w-4 animate-spin text-orange-600" />
+                <span>
+                  {totalBatchCount > 1
+                    ? `Generating Article ${activeBatchIndex} of ${totalBatchCount}`
+                    : "Generating Article"}
+                </span>
+              </div>
 
-            <div className="text-xs font-medium text-slate-900 truncate px-4">
-              &ldquo;{currentGeneratingTitle}&rdquo;
-            </div>
+              <div className="text-sm font-bold text-slate-900 truncate px-4">
+                &ldquo;{currentGeneratingTitle}&rdquo;
+              </div>
 
-            <p className="text-xs text-slate-600">
-              {PIPELINE_STAGES[currentStepIndex]}
-            </p>
-
-            <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
-              <div
-                className="bg-orange-500 h-full transition-all duration-500 rounded-full"
-                style={{
-                  width: `${
-                    totalBatchCount > 1
-                      ? ((activeBatchIndex - 1 + (currentStepIndex + 1) / PIPELINE_STAGES.length) /
-                          totalBatchCount) *
-                        100
-                      : ((currentStepIndex + 1) / PIPELINE_STAGES.length) * 100
-                  }%`,
-                }}
-              />
-            </div>
-            {totalBatchCount > 1 && (
-              <p className="text-[11px] text-slate-500">
-                {batchResults.length} of {totalBatchCount} articles finished
+              <p className="text-xs text-slate-600 font-medium">
+                {PIPELINE_STAGES[currentStepIndex]}
               </p>
-            )}
-          </div>
-        </Card>
+
+              <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden shadow-inner">
+                <div
+                  className="bg-gradient-to-r from-orange-500 to-amber-500 h-full transition-all duration-500 rounded-full shadow-sm"
+                  style={{
+                    width: `${
+                      totalBatchCount > 1
+                        ? ((activeBatchIndex - 1 + (currentStepIndex + 1) / PIPELINE_STAGES.length) /
+                            totalBatchCount) *
+                          100
+                        : ((currentStepIndex + 1) / PIPELINE_STAGES.length) * 100
+                    }%`,
+                  }}
+                />
+              </div>
+
+              {totalBatchCount > 1 && (
+                <p className="text-[11px] text-slate-500 font-medium">
+                  {batchResults.length} of {totalBatchCount} articles finished
+                </p>
+              )}
+            </div>
+          </Card>
+
+          {/* 2. Interactive "AI Signal" Mini Experience */}
+          <AISignalGame />
+
+          {/* 3. Rotating Content Studio Tips */}
+          <ContentStudioTip />
+        </div>
       )}
 
       {/* Generation Complete Output Banner */}

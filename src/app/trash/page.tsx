@@ -50,6 +50,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { DbContentItem } from "@/db/schema";
+import { BulkActionModal, BulkActionMode, BulkItem } from "@/components/ui/bulk-action-modal";
 
 interface TrashStats {
   total: number;
@@ -73,12 +74,10 @@ export default function TrashPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Modals
-  const [restoreModalItem, setRestoreModalItem] = useState<DbContentItem | null>(null);
-  const [bulkRestoreOpen, setBulkRestoreOpen] = useState(false);
-  const [permDeleteModalItem, setPermDeleteModalItem] = useState<DbContentItem | null>(null);
-  const [bulkPermDeleteOpen, setBulkPermDeleteOpen] = useState(false);
-  const [emptyTrashModalOpen, setEmptyTrashModalOpen] = useState(false);
+  // Bulk Action Modal State
+  const [actionModalOpen, setActionModalOpen] = useState(false);
+  const [actionModalMode, setActionModalMode] = useState<BulkActionMode>("restore");
+  const [itemsToAction, setItemsToAction] = useState<BulkItem[]>([]);
 
   // Toast
   const [toastMessage, setToastMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -136,128 +135,60 @@ export default function TrashPage() {
   const isAllSelected = items.length > 0 && selectedIds.length === items.length;
   const isIndeterminate = selectedIds.length > 0 && selectedIds.length < items.length;
 
-  // Single Restore
-  const handleSingleRestore = async (item: DbContentItem) => {
-    setIsProcessing(true);
-    try {
-      const res = await fetch(`/api/admin/trash/${item.id}/restore`, {
+  // Single & Bulk Action Openers
+  const handleSingleRestore = (item: DbContentItem) => {
+    setItemsToAction([item]);
+    setActionModalMode("restore");
+    setActionModalOpen(true);
+  };
+
+  const handleOpenBulkRestore = () => {
+    const selected = items.filter((it) => selectedIds.includes(it.id));
+    if (selected.length === 0) return;
+    setItemsToAction(selected);
+    setActionModalMode("restore");
+    setActionModalOpen(true);
+  };
+
+  const handleSinglePermanentDelete = (item: DbContentItem) => {
+    setItemsToAction([item]);
+    setActionModalMode("permanent-delete");
+    setActionModalOpen(true);
+  };
+
+  const handleOpenBulkPermanentDelete = () => {
+    const selected = items.filter((it) => selectedIds.includes(it.id));
+    if (selected.length === 0) return;
+    setItemsToAction(selected);
+    setActionModalMode("permanent-delete");
+    setActionModalOpen(true);
+  };
+
+  const handleOpenEmptyTrash = () => {
+    if (items.length === 0) return;
+    setItemsToAction(items);
+    setActionModalMode("permanent-delete");
+    setActionModalOpen(true);
+  };
+
+  // Item Processor for BulkActionModal in Trash
+  const handleProcessActionItem = async (it: BulkItem) => {
+    if (actionModalMode === "restore") {
+      const res = await fetch(`/api/admin/trash/${it.id}/restore`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspaceId: activeWorkspace?.id }),
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showToast(data.message || `"${item.title}" restored successfully.`);
-        setRestoreModalItem(null);
-        setSelectedIds((prev) => prev.filter((id) => id !== item.id));
-        fetchTrashItems();
-      } else {
-        showToast(data.error || "Failed to restore item", "error");
-      }
-    } catch {
-      showToast("Network error while restoring item", "error");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Bulk Restore
-  const handleBulkRestoreConfirm = async () => {
-    if (selectedIds.length === 0) return;
-    setIsProcessing(true);
-    try {
-      const res = await fetch("/api/admin/trash/restore", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId: activeWorkspace?.id, ids: selectedIds }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showToast(data.message || `${selectedIds.length} item(s) restored successfully.`);
-        setSelectedIds([]);
-        setBulkRestoreOpen(false);
-        fetchTrashItems();
-      } else {
-        showToast(data.error || "Failed to bulk restore items", "error");
-      }
-    } catch {
-      showToast("Error processing bulk restore", "error");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Single Permanent Delete
-  const handleSinglePermanentDelete = async (item: DbContentItem) => {
-    setIsProcessing(true);
-    try {
-      const res = await fetch(`/api/admin/trash/${item.id}/permanent?workspaceId=${activeWorkspace?.id}`, {
+      if (res.ok) return { success: true };
+      const data = await res.json().catch(() => ({}));
+      return { success: false, error: data.error || "Unable to restore this item." };
+    } else {
+      const res = await fetch(`/api/admin/trash/${it.id}/permanent?workspaceId=${activeWorkspace?.id}`, {
         method: "DELETE",
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showToast(`"${item.title}" permanently deleted.`);
-        setPermDeleteModalItem(null);
-        setSelectedIds((prev) => prev.filter((id) => id !== item.id));
-        fetchTrashItems();
-      } else {
-        showToast(data.error || "Failed to permanently delete item", "error");
-      }
-    } catch {
-      showToast("Error permanently deleting item", "error");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Bulk Permanent Delete
-  const handleBulkPermanentDeleteConfirm = async () => {
-    if (selectedIds.length === 0) return;
-    setIsProcessing(true);
-    try {
-      const res = await fetch("/api/admin/trash/permanent-delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId: activeWorkspace?.id, ids: selectedIds }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showToast(data.message || `${selectedIds.length} item(s) permanently deleted.`);
-        setSelectedIds([]);
-        setBulkPermDeleteOpen(false);
-        fetchTrashItems();
-      } else {
-        showToast(data.error || "Failed to permanently delete selected items", "error");
-      }
-    } catch {
-      showToast("Error processing bulk deletion", "error");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // Empty Trash
-  const handleEmptyTrashConfirm = async () => {
-    setIsProcessing(true);
-    try {
-      const res = await fetch("/api/admin/trash", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId: activeWorkspace?.id, action: "empty" }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showToast(data.message || "Trash has been completely emptied.");
-        setSelectedIds([]);
-        setEmptyTrashModalOpen(false);
-        fetchTrashItems();
-      } else {
-        showToast(data.error || "Failed to empty Trash", "error");
-      }
-    } catch {
-      showToast("Error emptying Trash", "error");
-    } finally {
-      setIsProcessing(false);
+      if (res.ok) return { success: true };
+      const data = await res.json().catch(() => ({}));
+      return { success: false, error: data.error || "Unable to delete this item." };
     }
   };
 
@@ -346,7 +277,7 @@ export default function TrashPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setEmptyTrashModalOpen(true)}
+            onClick={handleOpenEmptyTrash}
             disabled={isLoading || stats.total === 0}
             className="gap-1.5 h-9 text-xs font-semibold text-rose-700 border-rose-300 hover:bg-rose-50 hover:border-rose-400"
           >
@@ -446,7 +377,7 @@ export default function TrashPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setBulkRestoreOpen(true)}
+              onClick={handleOpenBulkRestore}
               disabled={isProcessing}
               className="h-8 text-xs font-semibold bg-transparent text-white border-slate-700 hover:bg-slate-800 hover:text-white gap-1.5"
             >
@@ -456,7 +387,7 @@ export default function TrashPage() {
             <Button
               variant="destructive"
               size="sm"
-              onClick={() => setBulkPermDeleteOpen(true)}
+              onClick={handleOpenBulkPermanentDelete}
               disabled={isProcessing}
               className="h-8 text-xs font-semibold gap-1.5 bg-rose-600 hover:bg-rose-700"
             >
@@ -612,7 +543,7 @@ export default function TrashPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setRestoreModalItem(item)}
+                          onClick={() => handleSingleRestore(item)}
                           disabled={isProcessing}
                           className="h-7 px-2 text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 gap-1"
                         >
@@ -631,7 +562,7 @@ export default function TrashPage() {
                               Trash Actions
                             </DropdownMenuLabel>
                             <DropdownMenuItem
-                              onClick={() => setRestoreModalItem(item)}
+                              onClick={() => handleSingleRestore(item)}
                               className="text-emerald-700 font-medium cursor-pointer gap-2"
                             >
                               <RotateCcw className="h-3.5 w-3.5" />
@@ -639,7 +570,7 @@ export default function TrashPage() {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
-                              onClick={() => setPermDeleteModalItem(item)}
+                              onClick={() => handleSinglePermanentDelete(item)}
                               className="text-rose-600 font-medium cursor-pointer gap-2"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -657,241 +588,19 @@ export default function TrashPage() {
         </Table>
       </Card>
 
-      {/* Single Restore Modal */}
-      <Dialog open={Boolean(restoreModalItem)} onOpenChange={(open) => !open && setRestoreModalItem(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <div className="flex items-center gap-2">
-              <RotateCcw className="h-4 w-4 text-emerald-600" />
-              <DialogTitle className="text-base font-bold text-slate-900">
-                Restore Content?
-              </DialogTitle>
-            </div>
-            <DialogDescription className="text-xs text-slate-500">
-              Are you sure you want to restore &ldquo;{restoreModalItem?.title}&rdquo; from Trash?
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-1">
-            <span className="font-semibold text-slate-800 block">
-              Previous State: {restoreModalItem?.status === "approved" ? "Published" : "Draft"}
-            </span>
-            <span className="text-slate-500 text-[11px] block">
-              {restoreModalItem?.status === "approved"
-                ? "This item will be restored to your active workspace and automatically re-published live to your website."
-                : "This item will return to your workspace as an active draft."}
-            </span>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setRestoreModalItem(null)}
-              disabled={isProcessing}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => restoreModalItem && handleSingleRestore(restoreModalItem)}
-              disabled={isProcessing}
-              className="gap-1.5 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
-            >
-              {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-              <span>Restore Item</span>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Bulk Restore Modal */}
-      <Dialog open={bulkRestoreOpen} onOpenChange={setBulkRestoreOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <div className="flex items-center gap-2">
-              <RotateCcw className="h-4 w-4 text-emerald-600" />
-              <DialogTitle className="text-base font-bold text-slate-900">
-                Restore {selectedIds.length} Selected Items?
-              </DialogTitle>
-            </div>
-            <DialogDescription className="text-xs text-slate-500">
-              All selected items will be restored from Trash to your workspace with their previous publication states.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="max-h-48 overflow-y-auto space-y-1.5 p-2 bg-slate-50 rounded border border-slate-200 text-xs">
-            {selectedItems.map((it) => (
-              <div key={it.id} className="flex items-center gap-2 text-slate-700 py-1">
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                <span className="truncate font-medium">{it.title}</span>
-                <span className="text-[10px] text-slate-400 capitalize">({it.type})</span>
-              </div>
-            ))}
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setBulkRestoreOpen(false)}
-              disabled={isProcessing}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleBulkRestoreConfirm}
-              disabled={isProcessing}
-              className="gap-1.5 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
-            >
-              {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-              <span>Restore {selectedIds.length} Items</span>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Single Permanent Delete Modal */}
-      <Dialog open={Boolean(permDeleteModalItem)} onOpenChange={(open) => !open && setPermDeleteModalItem(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <div className="flex items-center gap-2">
-              <ShieldAlert className="h-4 w-4 text-rose-600" />
-              <DialogTitle className="text-base font-bold text-rose-900">
-                Permanently Delete Item?
-              </DialogTitle>
-            </div>
-            <DialogDescription className="text-xs text-slate-500">
-              This action cannot be undone. This record and all versions will be permanently purged from the database.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs space-y-1">
-            <span className="font-semibold text-rose-900 block truncate">
-              {permDeleteModalItem?.title}
-            </span>
-            <span className="text-rose-700 text-[11px] block">
-              ⚠️ Once permanently deleted, this item cannot be recovered.
-            </span>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPermDeleteModalItem(null)}
-              disabled={isProcessing}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => permDeleteModalItem && handleSinglePermanentDelete(permDeleteModalItem)}
-              disabled={isProcessing}
-              className="gap-1.5 font-semibold bg-rose-600 hover:bg-rose-700"
-            >
-              {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-              <span>Delete Permanently</span>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Bulk Permanent Delete Modal */}
-      <Dialog open={bulkPermDeleteOpen} onOpenChange={setBulkPermDeleteOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <div className="flex items-center gap-2">
-              <ShieldAlert className="h-4 w-4 text-rose-600" />
-              <DialogTitle className="text-base font-bold text-rose-900">
-                Permanently Delete {selectedIds.length} Items?
-              </DialogTitle>
-            </div>
-            <DialogDescription className="text-xs text-slate-500">
-              This action cannot be undone. All selected items will be permanently erased from the database.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="max-h-48 overflow-y-auto space-y-1.5 p-2 bg-rose-50 rounded border border-rose-200 text-xs text-rose-900">
-            {selectedItems.map((it) => (
-              <div key={it.id} className="flex items-center gap-2 py-1">
-                <Trash2 className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-                <span className="truncate font-medium">{it.title}</span>
-              </div>
-            ))}
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setBulkPermDeleteOpen(false)}
-              disabled={isProcessing}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleBulkPermanentDeleteConfirm}
-              disabled={isProcessing}
-              className="gap-1.5 font-semibold bg-rose-600 hover:bg-rose-700"
-            >
-              {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-              <span>Delete {selectedIds.length} Items</span>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Empty Trash Modal */}
-      <Dialog open={emptyTrashModalOpen} onOpenChange={setEmptyTrashModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <div className="flex items-center gap-2">
-              <ShieldAlert className="h-4 w-4 text-rose-600" />
-              <DialogTitle className="text-base font-bold text-rose-900">
-                Empty Trash?
-              </DialogTitle>
-            </div>
-            <DialogDescription className="text-xs text-slate-500">
-              All items currently in Trash ({stats.total} item(s)) will be permanently purged from the database. This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-900 space-y-1">
-            <span className="font-semibold block">⚠️ Permanent Data Loss Warning</span>
-            <span className="text-rose-700 text-[11px] block">
-              Every blog and case study currently in the recycle bin will be completely deleted.
-            </span>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setEmptyTrashModalOpen(false)}
-              disabled={isProcessing}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleEmptyTrashConfirm}
-              disabled={isProcessing}
-              className="gap-1.5 font-semibold bg-rose-600 hover:bg-rose-700"
-            >
-              {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-              <span>Empty Entire Trash</span>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Bulk Action & Processing Modal */}
+      <BulkActionModal
+        open={actionModalOpen}
+        onOpenChange={setActionModalOpen}
+        mode={actionModalMode}
+        items={itemsToAction}
+        itemTypeLabel="content item"
+        onProcessItem={handleProcessActionItem}
+        onCompleted={() => {
+          setSelectedIds([]);
+          fetchTrashItems();
+        }}
+      />
     </div>
   );
 }

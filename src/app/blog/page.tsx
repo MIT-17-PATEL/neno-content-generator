@@ -59,6 +59,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ContentItem } from "@/types";
+import { BulkActionModal, BulkActionMode, BulkItem } from "@/components/ui/bulk-action-modal";
 
 interface BlogStats {
   total: number;
@@ -86,8 +87,10 @@ export default function BlogManagementPage() {
   const [isProcessingBulk, setIsProcessingBulk] = useState(false);
 
   // Modals & Feedback
-  const [publishModalOpen, setPublishModalOpen] = useState(false);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [itemsToAction, setItemsToAction] = useState<ContentItem[]>([]);
+  const [actionModalMode, setActionModalMode] = useState<"trash" | "publish">("trash");
+  const [actionModalOpen, setActionModalOpen] = useState(false);
+
   const [websiteModalOpen, setWebsiteModalOpen] = useState(false);
   const [websiteBlogs, setWebsiteBlogs] = useState<Array<{ id: string; title: string; slug: string; category?: string }>>([]);
   const [isLoadingWebsiteBlogs, setIsLoadingWebsiteBlogs] = useState(false);
@@ -148,24 +151,11 @@ export default function BlogManagementPage() {
   const isAllSelected = items.length > 0 && selectedIds.length === items.length;
   const isIndeterminate = selectedIds.length > 0 && selectedIds.length < items.length;
 
-  // Single & Bulk Actions
+  // Single Actions
   const handleSinglePublish = async (item: ContentItem) => {
-    try {
-      const res = await fetch("/api/admin/blogs/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId: activeWorkspace?.id, id: item.id }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showToast(`"${item.title}" published directly to website!`);
-        fetchBlogs();
-      } else {
-        showToast(data.error || "Failed to publish blog", "error");
-      }
-    } catch {
-      showToast("Error connecting to website publish API", "error");
-    }
+    setItemsToAction([item]);
+    setActionModalMode("publish");
+    setActionModalOpen(true);
   };
 
   const handleSingleUnpublish = async (item: ContentItem) => {
@@ -200,47 +190,27 @@ export default function BlogManagementPage() {
     }
   };
 
-  const handleSingleDelete = async (item: ContentItem) => {
-    if (!confirm(`Are you sure you want to delete "${item.title}"?\n\nThis will also remove it from the live website.`)) {
-      return;
-    }
-    try {
-      const res = await fetch(`/api/admin/blogs/${item.id}?workspaceId=${activeWorkspace?.id}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        showToast(`Moved "${item.title}" to Trash (7-day recovery)`);
-        setSelectedIds((prev) => prev.filter((id) => id !== item.id));
-        fetchBlogs();
-      }
-    } catch {
-      showToast("Failed to delete blog", "error");
-    }
+  const handleSingleDelete = (item: ContentItem) => {
+    setItemsToAction([item]);
+    setActionModalMode("trash");
+    setActionModalOpen(true);
   };
 
-  // Bulk Actions
-  const handleBulkPublishConfirm = async () => {
-    setIsProcessingBulk(true);
-    try {
-      const res = await fetch("/api/admin/blogs/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId: activeWorkspace?.id, ids: selectedIds }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showToast(`${data.publishedCount} blog(s) published successfully to the website!`);
-        setSelectedIds([]);
-        setPublishModalOpen(false);
-        fetchBlogs();
-      } else {
-        showToast(data.error || "Bulk publishing encountered issues", "error");
-      }
-    } catch {
-      showToast("Error processing bulk publishing", "error");
-    } finally {
-      setIsProcessingBulk(false);
-    }
+  // Bulk Action Openers
+  const handleOpenBulkDelete = () => {
+    const selected = items.filter((it) => selectedIds.includes(it.id));
+    if (selected.length === 0) return;
+    setItemsToAction(selected);
+    setActionModalMode("trash");
+    setActionModalOpen(true);
+  };
+
+  const handleOpenBulkPublish = () => {
+    const selected = items.filter((it) => selectedIds.includes(it.id));
+    if (selected.length === 0) return;
+    setItemsToAction(selected);
+    setActionModalMode("publish");
+    setActionModalOpen(true);
   };
 
   const handleBulkUnpublish = async () => {
@@ -264,20 +234,24 @@ export default function BlogManagementPage() {
     }
   };
 
-  const handleBulkDeleteConfirm = async () => {
-    setIsProcessingBulk(true);
-    try {
-      for (const id of selectedIds) {
-        await fetch(`/api/admin/blogs/${id}?workspaceId=${activeWorkspace?.id}`, { method: "DELETE" });
-      }
-      showToast(`${selectedIds.length} blog(s) moved to Trash (7-day recovery)`);
-      setSelectedIds([]);
-      setDeleteModalOpen(false);
-      fetchBlogs();
-    } catch {
-      showToast("Failed to delete all selected blogs", "error");
-    } finally {
-      setIsProcessingBulk(false);
+  // Item Processor for BulkActionModal
+  const handleProcessActionItem = async (it: BulkItem) => {
+    if (actionModalMode === "trash") {
+      const res = await fetch(`/api/admin/blogs/${it.id}?workspaceId=${activeWorkspace?.id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) return { success: true };
+      const data = await res.json().catch(() => ({}));
+      return { success: false, error: data.error || "Unable to delete this item." };
+    } else {
+      const res = await fetch("/api/admin/blogs/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId: activeWorkspace?.id, id: it.id }),
+      });
+      if (res.ok) return { success: true };
+      const data = await res.json().catch(() => ({}));
+      return { success: false, error: data.error || "Unable to publish this item." };
     }
   };
 
@@ -446,7 +420,7 @@ export default function BlogManagementPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setPublishModalOpen(true)}
+              onClick={handleOpenBulkPublish}
               className="gap-1.5 h-9 text-xs font-semibold border-orange-300 text-orange-700 bg-orange-50 hover:bg-orange-100"
             >
               <Send className="h-3.5 w-3.5" />
@@ -583,7 +557,7 @@ export default function BlogManagementPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setPublishModalOpen(true)}
+              onClick={handleOpenBulkPublish}
               disabled={isProcessingBulk}
               className="h-7 text-xs bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700 hover:text-white"
             >
@@ -602,7 +576,7 @@ export default function BlogManagementPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setDeleteModalOpen(true)}
+              onClick={handleOpenBulkDelete}
               disabled={isProcessingBulk}
               className="h-7 text-xs bg-rose-950 border-rose-800 text-rose-200 hover:bg-rose-900 hover:text-white"
             >
@@ -790,93 +764,21 @@ export default function BlogManagementPage() {
         </CardContent>
       </Card>
 
-      {/* Bulk Publish Modal */}
-      <Dialog open={publishModalOpen} onOpenChange={setPublishModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-900">
-              Publish Blogs to Website
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              You are about to publish {selectedIds.length} blog(s) to the live Neno website. Next.js ISR caches will be purged immediately.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="max-h-48 overflow-y-auto space-y-1.5 p-2 bg-slate-50 rounded border border-slate-200 text-xs">
-            {selectedItems.map((it) => (
-              <div key={it.id} className="flex items-center gap-2 text-slate-700 py-1">
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                <span className="truncate font-medium">{it.title}</span>
-              </div>
-            ))}
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPublishModalOpen(false)}
-              disabled={isProcessingBulk}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleBulkPublishConfirm}
-              disabled={isProcessingBulk}
-              className="gap-1.5 font-semibold bg-orange-600 hover:bg-orange-700"
-            >
-              {isProcessingBulk ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-              <span>Publish {selectedIds.length} Blog(s)</span>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Bulk Delete Modal */}
-      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-rose-900">
-              Delete Selected Blogs
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              Are you sure you want to permanently delete {selectedIds.length} selected blog(s)? This will also remove them from the live website database.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="max-h-48 overflow-y-auto space-y-1.5 p-2 bg-rose-50 rounded border border-rose-200 text-xs text-rose-800">
-            {selectedItems.map((it) => (
-              <div key={it.id} className="flex items-center gap-2 py-1">
-                <Trash2 className="h-3.5 w-3.5 text-rose-600 shrink-0" />
-                <span className="truncate font-medium">{it.title}</span>
-              </div>
-            ))}
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDeleteModalOpen(false)}
-              disabled={isProcessingBulk}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleBulkDeleteConfirm}
-              disabled={isProcessingBulk}
-              className="gap-1.5 font-semibold"
-            >
-              {isProcessingBulk ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-              <span>Delete {selectedIds.length} Blog(s)</span>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Standardized Bulk Action Processing Modal */}
+      <BulkActionModal
+        open={actionModalOpen}
+        onOpenChange={setActionModalOpen}
+        mode={actionModalMode}
+        items={itemsToAction}
+        itemTypeLabel="blog"
+        onProcessItem={handleProcessActionItem}
+        onCompleted={(successCount) => {
+          if (successCount > 0) {
+            setSelectedIds((prev) => prev.filter((id) => !itemsToAction.some((it) => it.id === id)));
+            fetchBlogs();
+          }
+        }}
+      />
 
       {/* Website Sync & Clean Dialog */}
       <Dialog open={websiteModalOpen} onOpenChange={setWebsiteModalOpen}>
