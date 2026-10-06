@@ -1,12 +1,23 @@
 /**
- * Universal AI Client supporting Google Gemini and OpenAI.
- * Automatically handles multi-model failovers, schema formatting, and fallback resilience.
+ * Universal Multi-Provider AI Client supporting:
+ * 1. OpenRouter (e.g. google/gemma-4-26b-a4b-it:free, openrouter/free)
+ * 2. Google Gemini API (AQ.*, AIza*)
+ * 3. OpenAI / Groq / Anthropic compatible endpoints
+ * Automatically handles multi-model failovers, JSON extraction, and rate-limit resilience.
  */
 
 export interface AiCallParams {
   systemPrompt: string;
   userPrompt: string;
 }
+
+const OPENROUTER_CANDIDATE_MODELS = [
+  process.env.AI_MODEL || "google/gemma-4-26b-a4b-it:free",
+  "google/gemma-4-31b-it:free",
+  "openrouter/free",
+  "nvidia/nemotron-3-super-120b-a12b:free",
+  "liquid/lfm-2.5-2.6b:free",
+];
 
 const GEMINI_CANDIDATE_MODELS = [
   "gemini-2.5-flash",
@@ -21,8 +32,9 @@ const GEMINI_CANDIDATE_MODELS = [
 
 export function getAiKey(): string | undefined {
   return (
-    process.env.GEMINI_API_KEY ||
+    process.env.OPENROUTER_API_KEY ||
     process.env.AI_PROVIDER_API_KEY ||
+    process.env.GEMINI_API_KEY ||
     process.env.GOOGLE_API_KEY ||
     process.env.OPENAI_API_KEY
   );
@@ -36,8 +48,20 @@ export function isAiConfigured(): boolean {
 export function getActiveAiModel(): string {
   const key = getAiKey();
   if (!key) return "studio-neural-v1 (Heuristic)";
+  if (key.startsWith("sk-or-")) {
+    return process.env.AI_MODEL || "google/gemma-4-26b-a4b-it:free (OpenRouter)";
+  }
   if (key.startsWith("sk-")) return "gpt-4o";
   return "gemini-2.5-flash";
+}
+
+/** Clean JSON string from potential Markdown code fences */
+function cleanJsonText(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
 }
 
 /**
@@ -52,7 +76,50 @@ export async function callAiStructured<T = unknown>(params: {
     throw new Error("No AI API key configured in environment.");
   }
 
-  // 1. If OpenAI key format (starts with sk-)
+  // 1. OpenRouter API (Keys starting with sk-or-)
+  if (key.startsWith("sk-or-") || process.env.OPENROUTER_API_KEY) {
+    let lastErr = "";
+    for (const model of OPENROUTER_CANDIDATE_MODELS) {
+      try {
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${key}`,
+            "HTTP-Referer": process.env.NEXT_PUBLIC_WEBSITE_URL || "https://www.nenotechnology.com",
+            "X-Title": "Neno Content Studio",
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [
+              {
+                role: "system",
+                content: `${params.systemPrompt}\n\nIMPORTANT: Return ONLY valid, parseable JSON object matching the requested schema. No conversational filler.`,
+              },
+              { role: "user", content: params.userPrompt },
+            ],
+            temperature: 0.7,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content || "{}";
+          const cleaned = cleanJsonText(content);
+          return JSON.parse(cleaned) as T;
+        } else {
+          const errBody = await response.json().catch(() => ({}));
+          lastErr = errBody?.error?.message || `HTTP ${response.status}`;
+          console.warn(`[OpenRouter] Model ${model} returned ${response.status}: ${lastErr}. Trying next candidate...`);
+        }
+      } catch (err) {
+        console.warn(`[OpenRouter] Error invoking ${model}:`, err);
+      }
+    }
+    throw new Error(`OpenRouter AI error across candidate models: ${lastErr || "Failed to generate structured response"}`);
+  }
+
+  // 2. Standard OpenAI format (sk-)
   if (key.startsWith("sk-")) {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -80,26 +147,22 @@ export async function callAiStructured<T = unknown>(params: {
     return JSON.parse(content) as T;
   }
 
-  // 2. Google Gemini API (AQ.*, AIza*, or custom Gemini key)
-  // Try available candidate models with automatic failover
-  let lastError = "";
-
+  // 3. Google Gemini API (AQ.*, AIza*, or native Gemini key)
+  let lastGeminiError = "";
   for (const model of GEMINI_CANDIDATE_MODELS) {
     try {
       const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-      
+
       const response = await fetch(geminiUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [
             {
               role: "user",
               parts: [
                 {
-                  text: `${params.systemPrompt}\n\nIMPORTANT: Return ONLY valid, parseable JSON matching the required schema. No markdown codeblock wrappings if possible.\n\n${params.userPrompt}`,
+                  text: `${params.systemPrompt}\n\nIMPORTANT: Return ONLY valid, parseable JSON matching the required schema.\n\n${params.userPrompt}`,
                 },
               ],
             },
@@ -116,29 +179,23 @@ export async function callAiStructured<T = unknown>(params: {
         const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
         if (rawText) {
-          const cleaned = rawText
-            .trim()
-            .replace(/^```json\s*/i, "")
-            .replace(/^```\s*/i, "")
-            .replace(/\s*```$/i, "");
-
+          const cleaned = cleanJsonText(rawText);
           return JSON.parse(cleaned) as T;
         }
       } else {
         const errJson = await response.json().catch(() => ({}));
-        lastError = errJson?.error?.message || `Status ${response.status}`;
-        console.warn(`Gemini model ${model} returned ${response.status}: ${lastError}. Trying next candidate...`);
+        lastGeminiError = errJson?.error?.message || `Status ${response.status}`;
       }
     } catch (err) {
       console.warn(`Error invoking Gemini model ${model}:`, err);
     }
   }
 
-  throw new Error(`Google Gemini API error across candidate models: ${lastError || "Failed to generate structured response"}`);
+  throw new Error(`Google Gemini API error across candidate models: ${lastGeminiError || "Failed to generate structured response"}`);
 }
 
 /**
- * Call AI for unstructured / text generation (e.g., section revisions, completions).
+ * Call AI for unstructured / text generation.
  */
 export async function callAiText(params: {
   systemPrompt: string;
@@ -149,6 +206,39 @@ export async function callAiText(params: {
     throw new Error("No AI API key configured in environment.");
   }
 
+  // 1. OpenRouter
+  if (key.startsWith("sk-or-") || process.env.OPENROUTER_API_KEY) {
+    for (const model of OPENROUTER_CANDIDATE_MODELS) {
+      try {
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${key}`,
+            "HTTP-Referer": process.env.NEXT_PUBLIC_WEBSITE_URL || "https://www.nenotechnology.com",
+            "X-Title": "Neno Content Studio",
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [
+              { role: "system", content: params.systemPrompt },
+              { role: "user", content: params.userPrompt },
+            ],
+            temperature: 0.7,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          return data.choices?.[0]?.message?.content || "";
+        }
+      } catch {
+        // Try next candidate
+      }
+    }
+  }
+
+  // 2. OpenAI
   if (key.startsWith("sk-")) {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -165,38 +255,27 @@ export async function callAiText(params: {
       }),
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`OpenAI API responded with status ${response.status}: ${errText}`);
+    if (response.ok) {
+      const data = await response.json();
+      return data.choices?.[0]?.message?.content || "";
     }
-
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || "";
   }
 
-  // Google Gemini API with candidate model failover
+  // 3. Google Gemini API
   for (const model of GEMINI_CANDIDATE_MODELS) {
     try {
       const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
       const response = await fetch(geminiUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [
             {
               role: "user",
-              parts: [
-                {
-                  text: `${params.systemPrompt}\n\n${params.userPrompt}`,
-                },
-              ],
+              parts: [{ text: `${params.systemPrompt}\n\n${params.userPrompt}` }],
             },
           ],
-          generationConfig: {
-            temperature: 0.7,
-          },
+          generationConfig: { temperature: 0.7 },
         }),
       });
 
@@ -210,5 +289,5 @@ export async function callAiText(params: {
     }
   }
 
-  throw new Error("Google Gemini API call failed across candidate models.");
+  throw new Error("AI text generation failed across all available providers.");
 }
