@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ContentService } from "@/services/content-service";
 
-export const revalidate = 60; // ISR cache for 60 seconds
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(req: NextRequest) {
   try {
