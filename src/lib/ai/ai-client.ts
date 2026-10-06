@@ -3,7 +3,7 @@
  * 1. OpenRouter (e.g. google/gemma-4-26b-a4b-it:free, openrouter/free)
  * 2. Google Gemini API (AQ.*, AIza*)
  * 3. OpenAI / Groq / Anthropic compatible endpoints
- * Automatically handles multi-model failovers, JSON extraction, and rate-limit resilience.
+ * Automatically handles multi-model failovers, robust JSON extraction, and rate-limit resilience.
  */
 
 export interface AiCallParams {
@@ -48,20 +48,54 @@ export function isAiConfigured(): boolean {
 export function getActiveAiModel(): string {
   const key = getAiKey();
   if (!key) return "studio-neural-v1 (Heuristic)";
-  if (key.startsWith("sk-or-")) {
+  if (key.startsWith("sk-or-") || process.env.OPENROUTER_API_KEY) {
     return process.env.AI_MODEL || "google/gemma-4-26b-a4b-it:free (OpenRouter)";
   }
   if (key.startsWith("sk-")) return "gpt-4o";
   return "gemini-2.5-flash";
 }
 
-/** Clean JSON string from potential Markdown code fences */
-function cleanJsonText(raw: string): string {
-  return raw
-    .trim()
+/** Robust JSON extractor that handles markdown codeblocks, reasoning text, and preambles */
+export function extractStructuredJson<T = unknown>(raw: string): T | null {
+  if (!raw || typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+
+  // 1. Direct JSON parse
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {}
+
+  // 2. Strip standard markdown code fences
+  const stripped = trimmed
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/i, "")
     .trim();
+
+  try {
+    return JSON.parse(stripped) as T;
+  } catch {}
+
+  // 3. Extract matching object substring { ... }
+  const firstBrace = trimmed.indexOf("{");
+  const lastBrace = trimmed.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    const jsonSub = trimmed.slice(firstBrace, lastBrace + 1);
+    try {
+      return JSON.parse(jsonSub) as T;
+    } catch {}
+  }
+
+  // 4. Extract matching array substring [ ... ]
+  const firstBracket = trimmed.indexOf("[");
+  const lastBracket = trimmed.lastIndexOf("]");
+  if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+    const jsonSub = trimmed.slice(firstBracket, lastBracket + 1);
+    try {
+      return JSON.parse(jsonSub) as T;
+    } catch {}
+  }
+
+  return null;
 }
 
 /**
@@ -94,7 +128,7 @@ export async function callAiStructured<T = unknown>(params: {
             messages: [
               {
                 role: "system",
-                content: `${params.systemPrompt}\n\nIMPORTANT: Return ONLY valid, parseable JSON object matching the requested schema. No conversational filler.`,
+                content: `${params.systemPrompt}\n\nIMPORTANT: Output ONLY a valid JSON object matching the requested fields. Do not include introductory notes or reasoning outside the JSON.`,
               },
               { role: "user", content: params.userPrompt },
             ],
@@ -104,9 +138,12 @@ export async function callAiStructured<T = unknown>(params: {
 
         if (response.ok) {
           const data = await response.json();
-          const content = data.choices?.[0]?.message?.content || "{}";
-          const cleaned = cleanJsonText(content);
-          return JSON.parse(cleaned) as T;
+          const content = data.choices?.[0]?.message?.content || "";
+          const parsed = extractStructuredJson<T>(content);
+          if (parsed) {
+            return parsed;
+          }
+          console.warn(`[OpenRouter] Model ${model} returned unparseable text. Trying next model...`);
         } else {
           const errBody = await response.json().catch(() => ({}));
           lastErr = errBody?.error?.message || `HTTP ${response.status}`;
@@ -116,7 +153,7 @@ export async function callAiStructured<T = unknown>(params: {
         console.warn(`[OpenRouter] Error invoking ${model}:`, err);
       }
     }
-    throw new Error(`OpenRouter AI error across candidate models: ${lastErr || "Failed to generate structured response"}`);
+    throw new Error(`OpenRouter AI error: ${lastErr || "Failed to generate structured response"}`);
   }
 
   // 2. Standard OpenAI format (sk-)
@@ -144,7 +181,9 @@ export async function callAiStructured<T = unknown>(params: {
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "{}";
-    return JSON.parse(content) as T;
+    const parsed = extractStructuredJson<T>(content);
+    if (parsed) return parsed;
+    throw new Error("Failed to parse OpenAI JSON response");
   }
 
   // 3. Google Gemini API (AQ.*, AIza*, or native Gemini key)
@@ -179,8 +218,8 @@ export async function callAiStructured<T = unknown>(params: {
         const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
         if (rawText) {
-          const cleaned = cleanJsonText(rawText);
-          return JSON.parse(cleaned) as T;
+          const parsed = extractStructuredJson<T>(rawText);
+          if (parsed) return parsed;
         }
       } else {
         const errJson = await response.json().catch(() => ({}));
