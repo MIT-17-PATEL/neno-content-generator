@@ -123,6 +123,7 @@ export async function callAiStructured<T = unknown>(params: {
             "HTTP-Referer": process.env.NEXT_PUBLIC_WEBSITE_URL || "https://www.nenotechnology.com",
             "X-Title": "Neno Content Studio",
           },
+          signal: AbortSignal.timeout(12000),
           body: JSON.stringify({
             model: model,
             messages: [
@@ -257,6 +258,7 @@ export async function callAiText(params: {
             "HTTP-Referer": process.env.NEXT_PUBLIC_WEBSITE_URL || "https://www.nenotechnology.com",
             "X-Title": "Neno Content Studio",
           },
+          signal: AbortSignal.timeout(12000),
           body: JSON.stringify({
             model: model,
             messages: [

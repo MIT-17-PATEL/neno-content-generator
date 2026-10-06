@@ -258,19 +258,7 @@ export class VisualConceptEngine {
 
     const combinedText = `${titleLower} ${summaryLower} ${categoryLower} ${industryLower} ${conceptsLower}`;
 
-    // 1. Try AI-powered synthesis if key is available
-    if (isAiConfigured()) {
-      try {
-        const aiConcept = await this.synthesizeWithAi(context);
-        if (aiConcept && aiConcept.visualConcept && aiConcept.visualConcept.length > 20) {
-          return aiConcept;
-        }
-      } catch (err) {
-        console.warn("AI visual concept synthesis fallback to rule engine:", err);
-      }
-    }
-
-    // 2. Deterministic Semantic Domain Matching
+    // 1. Instant Semantic Domain Matching (0ms latency, high precision)
     for (const [key, rule] of Object.entries(DOMAIN_RULES)) {
       if (rule.keywords.some((kw) => combinedText.includes(kw))) {
         return {
