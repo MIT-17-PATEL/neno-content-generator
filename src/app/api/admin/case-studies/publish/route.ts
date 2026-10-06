@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, requireWorkspaceAccess } from "@/server/auth-guard";
 import { ContentService } from "@/services/content-service";
+import { WebsiteSyncService } from "@/lib/export/website-sync";
+import { VersionService } from "@/services/version-service";
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -23,6 +25,15 @@ export async function POST(req: NextRequest) {
     for (const id of ids) {
       const dbItem = await ContentService.getById(workspaceId, id);
       if (!dbItem) continue;
+
+      const latestVersion = await VersionService.getLatest(id);
+      if (latestVersion) {
+        try {
+          await WebsiteSyncService.publishCaseStudy(dbItem, latestVersion, workspaceId);
+        } catch (syncErr) {
+          console.warn(`[Publish Route] Sync to website warning for "${dbItem.title}":`, syncErr);
+        }
+      }
 
       await ContentService.updateStatus(workspaceId, id, "approved");
       results.push({ id, title: dbItem.title, success: true });

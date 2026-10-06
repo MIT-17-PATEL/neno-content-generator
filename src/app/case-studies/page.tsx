@@ -247,6 +247,30 @@ export default function CaseStudiesPage() {
     }
   };
 
+  const handleExportAllToWebsite = async () => {
+    if (!activeWorkspace) return;
+    setIsSyncingWebsite(true);
+    try {
+      const res = await fetch("/api/admin/case-studies/sync-website", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId: activeWorkspace.id, action: "export-all-to-website" }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(data.message || "Exported all case studies to website successfully!");
+        fetchCaseStudies();
+        fetchWebsiteCaseStudies();
+      } else {
+        showToast(data.error || "Failed to export case studies to website", "error");
+      }
+    } catch {
+      showToast("Network error exporting to website", "error");
+    } finally {
+      setIsSyncingWebsite(false);
+    }
+  };
+
   const handleDeleteFromWebsiteSingle = async (wb: { id: string; slug: string; title: string }) => {
     if (!confirm(`Delete "${wb.title}" directly from the live website?`)) return;
     setIsSyncingWebsite(true);
@@ -806,6 +830,16 @@ export default function CaseStudiesPage() {
                 </span>
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleExportAllToWebsite}
+                  disabled={isSyncingWebsite || items.length === 0}
+                  className="h-8 text-xs font-semibold gap-1.5 bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  {isSyncingWebsite ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
+                  <span>Push All {items.length} to Website</span>
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"

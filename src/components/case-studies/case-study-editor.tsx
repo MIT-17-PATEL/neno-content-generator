@@ -20,7 +20,6 @@ import {
   TrendingUp,
   Quote,
   Code,
-  Image as ImageIcon,
   Check,
   X,
   Loader2,
@@ -42,7 +41,7 @@ import { generateSlug } from "@/lib/utils";
 
 interface Section {
   id: string;
-  type: "Text" | "Quote" | "Statistics" | "Technology" | "Results" | "CTA" | "Image";
+  type: "Text" | "Quote" | "Statistics" | "Technology" | "Results" | "CTA";
   title: string;
   content: string;
 }
@@ -101,7 +100,6 @@ export function CaseStudyEditor({ initialId }: CaseStudyEditorProps) {
   const [industry, setIndustry] = useState("Enterprise AI & Cloud");
   const [location, setLocation] = useState("Global");
   const [shortDescription, setShortDescription] = useState("");
-  const [coverImage, setCoverImage] = useState("");
   const [status, setStatus] = useState<"Draft" | "Published" | "Scheduled">("Draft");
 
   // Modular Sections State
@@ -139,7 +137,6 @@ export function CaseStudyEditor({ initialId }: CaseStudyEditorProps) {
           const meta = data.version.seo_metadata || {};
           setClientName(meta.clientName || "");
           setLocation(meta.location || "Global");
-          setCoverImage(meta.featuredImageUrl || meta.coverImage || meta.ogImage || meta.featuredImageBrief || "");
           if (Array.isArray(meta.sections) && meta.sections.length > 0) {
             setSections(meta.sections);
           }
@@ -204,7 +201,6 @@ export function CaseStudyEditor({ initialId }: CaseStudyEditorProps) {
       industry,
       location,
       shortDescription,
-      coverImage,
       sections,
       status: publishNow ? "Published" : status,
       publishNow,
@@ -403,29 +399,17 @@ export function CaseStudyEditor({ initialId }: CaseStudyEditorProps) {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Cover Image URL / Storage Key</label>
-              <Input
-                placeholder="uploads/case-studies/banner.webp or https://..."
-                value={coverImage}
-                onChange={(e) => setCoverImage(e.target.value)}
-                className="text-xs"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Publication Status</label>
-              <Select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as "Draft" | "Published" | "Scheduled")}
-                className="text-xs"
-              >
-                <option value="Draft">Draft</option>
-                <option value="Published">Published (Live on Website)</option>
-                <option value="Scheduled">Scheduled</option>
-              </Select>
-            </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-700">Publication Status</label>
+            <Select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as "Draft" | "Published" | "Scheduled")}
+              className="text-xs"
+            >
+              <option value="Draft">Draft</option>
+              <option value="Published">Published (Live on Website)</option>
+              <option value="Scheduled">Scheduled</option>
+            </Select>
           </div>
         </CardContent>
       </Card>

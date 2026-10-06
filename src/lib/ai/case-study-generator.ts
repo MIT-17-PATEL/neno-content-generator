@@ -251,76 +251,10 @@ By combining **${techArray.join(", ")}** with disciplined architectural patterns
 
     const validatedOutput = caseStudyOutputSchema.parse(rawObj);
 
-    // Auto-Generate Featured Visual Asset
-    let generatedImageUrl = "";
-    let finalImagePrompt = validatedOutput.featuredVisual.prompt;
-    let finalImageAlt = validatedOutput.featuredVisual.altText;
-
-    if (params.autoGenerateImage !== false) {
-      try {
-        const imageResult = await ImageGenerator.generate({
-          topic: validatedOutput.title || `${params.clientIndustry} Case Study: ${params.technology}`,
-          summary: validatedOutput.description || validatedOutput.excerpt,
-          category: validatedOutput.category || params.clientIndustry,
-          keyConcepts: [
-            params.clientIndustry,
-            params.technology,
-            params.resultsMetrics || "Enterprise Scalability",
-            ...(validatedOutput.seo?.keywords || []),
-          ],
-          industry: params.clientIndustry,
-          articleType: "case-study",
-          style: params.imageStyle || "isometric_3d",
-          aspectRatio: "16:9",
-          customPrompt: params.customImagePrompt || validatedOutput.featuredVisual?.prompt,
-          brandName,
-        });
-
-        if (imageResult?.publicUrl) {
-          generatedImageUrl = imageResult.publicUrl;
-          finalImagePrompt = imageResult.prompt || finalImagePrompt;
-          finalImageAlt = imageResult.altText || finalImageAlt;
-
-          await MediaService.create({
-            workspaceId: params.workspaceId,
-            type: "featured_image",
-            title: `${validatedOutput.title} — Featured Visual`,
-            prompt: finalImagePrompt,
-            altText: finalImageAlt,
-            aspectRatio: "16:9",
-            style: params.imageStyle || "isometric_3d",
-            storageKey: imageResult.storageKey || `generated/cs_${Date.now()}.png`,
-            publicUrl: generatedImageUrl,
-            fileSize: 45200,
-            mimeType: generatedImageUrl.startsWith("data:image/svg") ? "image/svg+xml" : "image/png",
-          });
-        }
-      } catch (imgErr) {
-        console.warn("Case study image generation fallback:", imgErr);
-      }
-    }
-
-    if (generatedImageUrl) {
-      validatedOutput.featuredVisual = {
-        brief: generatedImageUrl,
-        prompt: finalImagePrompt,
-        altText: finalImageAlt,
-        url: generatedImageUrl,
-      };
-
-      if (!validatedOutput.fullMarkdown.includes(generatedImageUrl)) {
-        const heroMarkdown = `\n\n![${validatedOutput.title}](${generatedImageUrl})\n\n`;
-        if (validatedOutput.fullMarkdown.includes("---")) {
-          const firstDivider = validatedOutput.fullMarkdown.indexOf("---");
-          validatedOutput.fullMarkdown =
-            validatedOutput.fullMarkdown.slice(0, firstDivider) +
-            heroMarkdown +
-            validatedOutput.fullMarkdown.slice(firstDivider);
-        } else {
-          validatedOutput.fullMarkdown = heroMarkdown + validatedOutput.fullMarkdown;
-        }
-      }
-    }
+    // Case studies do not require image generation
+    const generatedImageUrl = "";
+    const finalImagePrompt = "";
+    const finalImageAlt = "";
 
     const contentItem = await ContentService.create({
       workspaceId: params.workspaceId,
@@ -340,7 +274,7 @@ By combining **${techArray.join(", ")}** with disciplined architectural patterns
         keywords: validatedOutput.seo.keywords,
         slug: validatedOutput.seo.slug,
         featuredImagePrompt: finalImagePrompt,
-        featuredImageBrief: generatedImageUrl || validatedOutput.featuredVisual.brief,
+        featuredImageBrief: generatedImageUrl || validatedOutput.featuredVisual?.brief || "",
         coverImage: generatedImageUrl || undefined,
         ogImage: generatedImageUrl || undefined,
         featuredImageUrl: generatedImageUrl || undefined,

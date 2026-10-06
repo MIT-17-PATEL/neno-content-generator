@@ -51,12 +51,14 @@ export const caseStudyOutputSchema = z.object({
     keywords: z.array(z.string()).min(1),
     slug: z.string(),
   }),
-  featuredVisual: z.object({
-    brief: z.string(),
-    prompt: z.string(),
-    altText: z.string(),
-    url: z.string().optional(),
-  }),
+  featuredVisual: z
+    .object({
+      brief: z.string().optional(),
+      prompt: z.string().optional(),
+      altText: z.string().optional(),
+      url: z.string().optional(),
+    })
+    .optional(),
 });
 
 export type CaseStudyOutput = z.infer<typeof caseStudyOutputSchema>;

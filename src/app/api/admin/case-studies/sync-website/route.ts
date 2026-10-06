@@ -138,17 +138,27 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    if (action === "purge-all-website") {
-      const websiteCaseStudies = await WebsiteSyncService.listWebsiteCaseStudies();
-      let purgedCount = 0;
-      for (const wcs of websiteCaseStudies) {
-        const ok = await WebsiteSyncService.deleteCaseStudyFromWebsite(wcs.id || wcs.slug, wcs.title);
-        if (ok) purgedCount++;
+    if (action === "export-all-to-website" || action === "export") {
+      const allStudioItems = await ContentService.listByWorkspace(workspaceId, { type: "case-study" });
+      let exportedCount = 0;
+      for (const item of allStudioItems) {
+        const latestVersion = await VersionService.getLatest(item.id);
+        if (latestVersion) {
+          try {
+            const syncRes = await WebsiteSyncService.publishCaseStudy(item, latestVersion, workspaceId);
+            if (syncRes.success) {
+              exportedCount++;
+              await ContentService.updateStatus(workspaceId, item.id, "approved");
+            }
+          } catch (err) {
+            console.warn(`Export failed for "${item.title}":`, err);
+          }
+        }
       }
       return NextResponse.json({
         success: true,
-        message: `Purged ${purgedCount} case study item(s) from website`,
-        purgedCount,
+        message: `Exported ${exportedCount} case study item(s) to website`,
+        exportedCount,
       });
     }
 
