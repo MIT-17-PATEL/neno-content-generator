@@ -71,15 +71,24 @@ CREATE TABLE IF NOT EXISTS content_items (
     excerpt TEXT,
     current_version_id VARCHAR(64),
     created_by VARCHAR(64) REFERENCES users(id) ON DELETE SET NULL,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    deleted_by VARCHAR(64),
+    permanent_delete_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (workspace_id, slug)
 );
 
+-- Ensure columns exist if table was already created
+ALTER TABLE content_items ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE content_items ADD COLUMN IF NOT EXISTS deleted_by VARCHAR(64);
+ALTER TABLE content_items ADD COLUMN IF NOT EXISTS permanent_delete_at TIMESTAMP WITH TIME ZONE;
+
 CREATE INDEX IF NOT EXISTS idx_content_items_ws ON content_items(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_content_items_status ON content_items(status);
 CREATE INDEX IF NOT EXISTS idx_content_items_type ON content_items(type);
 CREATE INDEX IF NOT EXISTS idx_content_items_updated ON content_items(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_content_items_deleted ON content_items(deleted_at);
 
 -- 5. CONTENT VERSIONS
 CREATE TABLE IF NOT EXISTS content_versions (
@@ -99,7 +108,7 @@ CREATE INDEX IF NOT EXISTS idx_content_versions_content ON content_versions(cont
 -- 6. RESEARCH SOURCES
 CREATE TABLE IF NOT EXISTS research_sources (
     id VARCHAR(64) PRIMARY KEY,
-    content_id VARCHAR(64) NOT NULL REFERENCES content_items(id) ON DELETE CASCADE,
+    content_id VARCHAR(64) REFERENCES content_items(id) ON DELETE SET NULL,
     url TEXT NOT NULL,
     title VARCHAR(512) NOT NULL,
     publisher VARCHAR(255),
@@ -108,12 +117,13 @@ CREATE TABLE IF NOT EXISTS research_sources (
     relevance VARCHAR(64)
 );
 
+ALTER TABLE research_sources ALTER COLUMN content_id DROP NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_research_sources_content ON research_sources(content_id);
 
 -- 7. GENERATION RUNS
 CREATE TABLE IF NOT EXISTS generation_runs (
     id VARCHAR(64) PRIMARY KEY,
-    content_id VARCHAR(64) NOT NULL REFERENCES content_items(id) ON DELETE CASCADE,
+    content_id VARCHAR(64) REFERENCES content_items(id) ON DELETE SET NULL,
     run_type VARCHAR(64) NOT NULL, -- 'blog_full', 'case_study', 'rewrite', 'seo'
     status VARCHAR(32) NOT NULL DEFAULT 'pending', -- 'pending', 'running', 'completed', 'failed'
     model VARCHAR(128) NOT NULL,
@@ -127,6 +137,7 @@ CREATE TABLE IF NOT EXISTS generation_runs (
     completed_at TIMESTAMP WITH TIME ZONE
 );
 
+ALTER TABLE generation_runs ALTER COLUMN content_id DROP NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_generation_runs_content ON generation_runs(content_id);
 CREATE INDEX IF NOT EXISTS idx_generation_runs_status ON generation_runs(status);
 

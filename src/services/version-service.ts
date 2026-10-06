@@ -278,6 +278,21 @@ export class VersionService {
     };
 
     if (db.isConfigured) {
+      let validUserId: string | null = null;
+      if (data.createdBy) {
+        try {
+          const userCheck = await db.query("SELECT id FROM users WHERE id = $1 LIMIT 1", [data.createdBy]);
+          if (userCheck.rows.length > 0) {
+            validUserId = userCheck.rows[0].id;
+          } else {
+            const firstUser = await db.query("SELECT id FROM users LIMIT 1");
+            validUserId = firstUser.rows[0]?.id || null;
+          }
+        } catch {
+          validUserId = null;
+        }
+      }
+
       const query = `
         INSERT INTO content_versions (id, content_id, version_number, content, seo_metadata, generation_run_id, created_by)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -290,7 +305,7 @@ export class VersionService {
         newVersion.content,
         JSON.stringify(newVersion.seo_metadata),
         newVersion.generation_run_id,
-        newVersion.created_by,
+        validUserId,
       ]);
 
       // Update current_version_id on content_items

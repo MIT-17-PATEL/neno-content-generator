@@ -1,5 +1,21 @@
 import fs from "fs";
 import path from "path";
+
+// Load .env.local if DATABASE_URL is not present
+if (!process.env.DATABASE_URL) {
+  const envLocalPath = path.join(process.cwd(), ".env.local");
+  if (fs.existsSync(envLocalPath)) {
+    const envContent = fs.readFileSync(envLocalPath, "utf-8");
+    for (const line of envContent.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith("#") && trimmed.includes("=")) {
+        const [k, ...v] = trimmed.split("=");
+        process.env[k.trim()] = v.join("=").trim().replace(/^["']|["']$/g, "");
+      }
+    }
+  }
+}
+
 import { db } from "./client";
 
 export async function runMigrations() {

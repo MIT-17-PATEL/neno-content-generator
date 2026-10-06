@@ -112,16 +112,21 @@ export class ResearchService {
 
 export class GenerationService {
   static async startRun(data: {
-    contentId: string;
+    contentId?: string;
     runType: string;
     model: string;
     promptVersion?: string;
     inputData: Record<string, unknown>;
   }): Promise<DbGenerationRun> {
     const id = `run_${crypto.randomUUID().slice(0, 8)}`;
+    const effectiveContentId =
+      data.contentId && data.contentId !== "temp_init" && data.contentId !== "temp"
+        ? data.contentId
+        : undefined;
+
     const newRun: DbGenerationRun = {
       id,
-      content_id: data.contentId,
+      content_id: effectiveContentId as unknown as string,
       run_type: data.runType,
       status: "running",
       model: data.model,
@@ -140,7 +145,7 @@ export class GenerationService {
       `;
       const res = await db.query<DbGenerationRun>(query, [
         newRun.id,
-        newRun.content_id,
+        effectiveContentId || null,
         newRun.run_type,
         newRun.status,
         newRun.model,
@@ -158,24 +163,38 @@ export class GenerationService {
     runId: string,
     data: {
       outputData: Record<string, unknown>;
+      contentId?: string;
       tokenUsage?: number;
       estimatedCost?: number;
     }
   ): Promise<DbGenerationRun | null> {
     if (db.isConfigured) {
-      const res = await db.query<DbGenerationRun>(
-        `UPDATE generation_runs
-         SET status = 'completed', output_data = $1, token_usage = $2, estimated_cost = $3, completed_at = NOW()
-         WHERE id = $4
-         RETURNING *`,
-        [JSON.stringify(data.outputData), data.tokenUsage || 0, data.estimatedCost || 0, runId]
-      );
+      let query = `UPDATE generation_runs
+         SET status = 'completed', output_data = $1, token_usage = $2, estimated_cost = $3, completed_at = NOW()`;
+      const params: unknown[] = [
+        JSON.stringify(data.outputData),
+        data.tokenUsage || 0,
+        data.estimatedCost || 0,
+      ];
+
+      if (data.contentId && data.contentId !== "temp_init") {
+        params.push(data.contentId);
+        query += `, content_id = $${params.length}`;
+      }
+
+      params.push(runId);
+      query += ` WHERE id = $${params.length} RETURNING *`;
+
+      const res = await db.query<DbGenerationRun>(query, params);
       return res.rows[0] || null;
     }
 
     const run = memoryRuns.get(runId);
     if (!run) return null;
     run.status = "completed";
+    if (data.contentId && data.contentId !== "temp_init") {
+      run.content_id = data.contentId;
+    }
     run.output_data = data.outputData;
     run.token_usage = data.tokenUsage || 0;
     run.estimated_cost = data.estimatedCost || 0;

@@ -86,7 +86,6 @@ export async function runBlogGenerationPipeline(
 
   // 3. Initiate Generation Run Record
   const initialRun = await GenerationService.startRun({
-    contentId: "temp_init",
     runType: "blog_full",
     model: isAiConfigured() ? getActiveAiModel() : "studio-neural-v1",
     promptVersion: "v2.0-human-editorial-architect",
@@ -481,6 +480,7 @@ This architecture delivers clear returns for teams with independent deployment v
     // 10. Update generation run record to completed
     const approxTokens = Math.round(validatedOutput.article.length / 4);
     await GenerationService.completeRun(initialRun.id, {
+      contentId: contentItem.id,
       outputData: validatedOutput,
       tokenUsage: approxTokens,
       estimatedCost: (approxTokens / 1000) * 0.005,

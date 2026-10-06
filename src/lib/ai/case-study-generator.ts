@@ -37,7 +37,6 @@ export async function runCaseStudyGenerationPipeline(
   const prohibitedTerms = brand?.prohibited_terms || [];
 
   const initialRun = await GenerationService.startRun({
-    contentId: "temp_case_study",
     runType: "case_study",
     model: isAiConfigured() ? getActiveAiModel() : "studio-neural-v1",
     promptVersion: "v1.0-case-study-engine",
@@ -354,6 +353,7 @@ By combining **${techArray.join(", ")}** with disciplined architectural patterns
 
     const approxTokens = Math.round(validatedOutput.fullMarkdown.length / 4);
     await GenerationService.completeRun(initialRun.id, {
+      contentId: contentItem.id,
       outputData: validatedOutput,
       tokenUsage: approxTokens,
       estimatedCost: (approxTokens / 1000) * 0.005,

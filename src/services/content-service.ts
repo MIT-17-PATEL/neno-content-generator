@@ -404,6 +404,21 @@ export class ContentService {
     };
 
     if (db.isConfigured) {
+      let validUserId: string | null = null;
+      if (data.createdBy) {
+        try {
+          const userCheck = await db.query("SELECT id FROM users WHERE id = $1 LIMIT 1", [data.createdBy]);
+          if (userCheck.rows.length > 0) {
+            validUserId = userCheck.rows[0].id;
+          } else {
+            const firstUser = await db.query("SELECT id FROM users LIMIT 1");
+            validUserId = firstUser.rows[0]?.id || null;
+          }
+        } catch {
+          validUserId = null;
+        }
+      }
+
       const query = `
         INSERT INTO content_items (id, workspace_id, type, title, slug, status, category, excerpt, created_by)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -418,7 +433,7 @@ export class ContentService {
         newItem.status,
         newItem.category,
         newItem.excerpt,
-        newItem.created_by,
+        validUserId,
       ]);
       return res.rows[0];
     }
