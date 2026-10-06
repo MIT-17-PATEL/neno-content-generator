@@ -7,6 +7,7 @@ const trendingTopicsSchema = z.object({
   count: z.number().min(1).max(10).optional().default(5),
   industry: z.string().optional(),
   focusArea: z.string().optional(),
+  workspaceId: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -21,13 +22,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { category, count, industry, focusArea } = parsed.data;
+    const { category, count, industry, focusArea, workspaceId } = parsed.data;
 
     const result = await TrendingTopicsService.getTrendingTopics({
       category,
       count,
       industry,
       focusArea,
+      workspaceId,
     });
 
     return NextResponse.json(result);
@@ -44,11 +46,13 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get("category") || undefined;
     const count = parseInt(searchParams.get("count") || "5", 10);
     const industry = searchParams.get("industry") || undefined;
+    const workspaceId = searchParams.get("workspaceId") || undefined;
 
     const result = await TrendingTopicsService.getTrendingTopics({
       category,
       count: isNaN(count) ? 5 : count,
       industry,
+      workspaceId,
     });
 
     return NextResponse.json(result);

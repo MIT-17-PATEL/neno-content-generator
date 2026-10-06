@@ -117,12 +117,14 @@ export default function BlogGeneratorPage() {
     const targetCount = Math.max(1, Math.min(10, count));
     setIsFetchingTopics(true);
     try {
-      const res = await fetch("/api/topics/trending", {
+      const res = await fetch(`/api/topics/trending?t=${Date.now()}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        cache: "no-store",
         body: JSON.stringify({
           category,
           count: isSingle ? 1 : targetCount,
+          workspaceId: activeWorkspace?.id,
         }),
       });
 
