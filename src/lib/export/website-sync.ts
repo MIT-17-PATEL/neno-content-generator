@@ -104,7 +104,7 @@ export class WebsiteSyncService {
     const cleanCategory = ExportFormatter.cleanCategoryName(item.category);
     const cleanContent = ExportFormatter.formatCleanArticleMarkdown(version.content, item.title);
 
-    const featuredImgUrl =
+    const rawImgUrl =
       version.seoMetadata?.featuredImageUrl ||
       version.seoMetadata?.ogImage ||
       version.seoMetadata?.coverImage ||
@@ -112,6 +112,8 @@ export class WebsiteSyncService {
         ? version.seoMetadata.featuredImageBrief
         : "") ||
       "";
+
+    const featuredImgUrl = await this.resolveFeaturedImage(rawImgUrl, item.title);
 
     const targetPayload = {
       title: item.title,
@@ -150,6 +152,24 @@ export class WebsiteSyncService {
           websiteUrl: `${websiteBaseUrl}/blog-single/${item.slug}`,
           response: data,
         };
+      }
+
+      // If already exists (409), perform PUT update
+      if (response.status === 409) {
+        const updateEndpoint = `${websiteBaseUrl}/api/admin/blogs/${encodeURIComponent(item.slug)}`;
+        const putRes = await fetch(updateEndpoint, {
+          method: "PUT",
+          headers,
+          body: JSON.stringify(targetPayload),
+        });
+        if (putRes.ok) {
+          return {
+            success: true,
+            publishedToWebsite: true,
+            endpointUsed: updateEndpoint,
+            websiteUrl: `${websiteBaseUrl}/blog-single/${item.slug}`,
+          };
+        }
       }
 
       const errBody = await response.text().catch(() => "");
@@ -276,7 +296,7 @@ export class WebsiteSyncService {
     const brand = await dataStore.getBrandSettings(workspaceId);
     const brandName = brand?.brand_name || "Neno Technology";
 
-    const featuredImgUrl =
+    const rawImgUrl =
       version.seoMetadata?.featuredImageUrl ||
       version.seoMetadata?.ogImage ||
       version.seoMetadata?.coverImage ||
@@ -284,6 +304,8 @@ export class WebsiteSyncService {
         ? version.seoMetadata.featuredImageBrief
         : "") ||
       "";
+
+    const featuredImgUrl = await this.resolveFeaturedImage(rawImgUrl, item.title);
 
     const cleanContent = ExportFormatter.formatCleanArticleMarkdown(version.content, item.title);
 
@@ -423,5 +445,40 @@ export class WebsiteSyncService {
     }
 
     return deleted;
+  }
+
+  private static async resolveFeaturedImage(rawUrl: string | undefined, title: string): Promise<string> {
+    if (rawUrl && (rawUrl.startsWith("data:") || rawUrl.startsWith("http://") || rawUrl.startsWith("https://"))) {
+      return rawUrl;
+    }
+
+    if (rawUrl && (rawUrl.startsWith("/uploads/") || rawUrl.startsWith("uploads/"))) {
+      try {
+        const fs = await import("fs");
+        const path = await import("path");
+        const localPath = path.join(process.cwd(), "public", rawUrl.replace(/^\/+/, ""));
+        if (fs.existsSync(localPath)) {
+          const fileBuf = fs.readFileSync(localPath);
+          const ext = path.extname(localPath).toLowerCase();
+          const mime = ext === ".svg" ? "image/svg+xml" : ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
+          return `data:${mime};base64,${fileBuf.toString("base64")}`;
+        }
+      } catch (err) {
+        console.warn("Could not read local image file for conversion:", err);
+      }
+    }
+
+    // Generate dynamic vector artwork fallback
+    try {
+      const { ImageGenerator } = await import("@/lib/ai/image-generator");
+      const generated = await ImageGenerator.generate({
+        topic: title || "Enterprise Engineering",
+        articleType: "blog",
+        aspectRatio: "16:9",
+      });
+      return generated.publicUrl;
+    } catch {
+      return "";
+    }
   }
 }

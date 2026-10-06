@@ -132,8 +132,65 @@ export class ImageGenerator {
       }
     }
 
-    // 2. High-Fidelity Domain-Tailored Vector Graphic Generator (Bespoke SVGs)
-    const { publicUrl, storageKey } = await this.saveDynamicSvg(options.topic, concept, aspectRatio);
+    // 2. High-Fidelity FLUX.1 AI Photorealistic & Editorial Image Generation (Topic-Matched)
+    try {
+      const dimensionsMap: Record<ImageAspectRatio, { width: number; height: number }> = {
+        "16:9": { width: 1200, height: 675 },
+        "1:1": { width: 800, height: 800 },
+        "4:3": { width: 1200, height: 900 },
+        "9:16": { width: 675, height: 1200 },
+      };
+      const { width, height } = dimensionsMap[aspectRatio] || { width: 1200, height: 675 };
+
+      const visualFocus = concept.visualConcept || options.topic;
+      const cleanPrompt = `${visualFocus}, ${VisualConceptEngine.getStyleDescription(style)}, 8k resolution, cinematic lighting, ultra-detailed editorial photography, octane render, masterpiece, professional art direction, no text, no watermark, no logos`;
+
+      const seed = Math.floor(Math.random() * 1000000);
+      const fluxUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=${width}&height=${height}&seed=${seed}&nologo=true&model=flux`;
+
+      const res = await fetch(fluxUrl, { signal: AbortSignal.timeout(20000) });
+      if (res.ok) {
+        const contentType = res.headers.get("content-type") || "image/jpeg";
+        const mime = contentType.includes("png") ? "image/png" : "image/jpeg";
+        const buffer = Buffer.from(await res.arrayBuffer());
+
+        if (buffer.length > 5000) {
+          const base64Img = buffer.toString("base64");
+          const publicUrl = `data:${mime};base64,${base64Img}`;
+          const cleanName = options.topic.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 35);
+          const filename = `hero_${cleanName}_${Date.now().toString().slice(-6)}.jpg`;
+          const storageKey = `uploads/media/${filename}`;
+
+          try {
+            const fs = await import("fs");
+            const path = await import("path");
+            const uploadDir = path.join(process.cwd(), "public", "uploads", "media");
+            if (!fs.existsSync(uploadDir)) {
+              fs.mkdirSync(uploadDir, { recursive: true });
+            }
+            fs.writeFileSync(path.join(uploadDir, filename), buffer);
+          } catch {}
+
+          return {
+            title: `${options.topic} — Featured Visual`,
+            prompt: cleanPrompt,
+            altText,
+            publicUrl,
+            storageKey,
+            aspectRatio,
+            style,
+            visualConcept: concept.visualConcept,
+            colorPalette: concept.colorPalette,
+            domainKey: concept.domainKey,
+          };
+        }
+      }
+    } catch (fluxErr) {
+      console.warn("FLUX image generator fallback to SVG:", fluxErr);
+    }
+
+    // 3. Dynamic Vector Graphic Generator (Bespoke SVGs Fallback)
+    const { publicUrl, storageKey } = await this.saveDynamicSvg(options, concept, aspectRatio);
     return {
       title: `${options.topic} — Featured Visual`,
       prompt,
@@ -149,22 +206,28 @@ export class ImageGenerator {
   }
 
   private static async saveDynamicSvg(
-    topic: string,
+    options: GenerateImageOptions,
     concept: VisualConcept,
     aspectRatio: ImageAspectRatio
   ): Promise<{ svgString: string; publicUrl: string; storageKey: string }> {
     const svgType = VisualConceptEngine.getSvgTypeForDomain(concept.domainKey);
     const svgString = SvgArtGenerator.generate({
+      topic: options.topic,
+      category: options.category,
+      summary: options.summary,
+      keyConcepts: options.keyConcepts,
       svgType,
       style: concept.stylePreset,
       aspectRatio,
       colorPalette: concept.colorPalette,
+      visualConcept: concept.visualConcept,
     });
 
-    const cleanName = topic.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 35);
+    const cleanName = options.topic.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 35);
     const filename = `hero_${cleanName}_${Date.now().toString().slice(-6)}.svg`;
     const storageKey = `uploads/media/${filename}`;
-    const publicUrl = `/${storageKey}`;
+    const base64Svg = Buffer.from(svgString, "utf8").toString("base64");
+    const publicUrl = `data:image/svg+xml;base64,${base64Svg}`;
 
     try {
       const fs = await import("fs");
