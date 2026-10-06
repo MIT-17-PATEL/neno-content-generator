@@ -20,14 +20,13 @@ const OPENROUTER_CANDIDATE_MODELS = [
 ];
 
 const GEMINI_CANDIDATE_MODELS = [
-  "gemini-2.5-flash",
-  "gemini-3.8-flash",
-  "gemini-flash-latest",
-  "gemini-2.5-pro",
-  "gemini-pro-latest",
   "gemini-2.5-flash-lite",
+  "gemini-flash-lite-latest",
+  "gemini-3.5-flash-lite",
+  "gemini-3.1-flash-lite",
   "gemini-3.5-flash",
-  "gemini-3.1-pro-preview",
+  "gemma-4-26b-a4b-it",
+  "gemini-2.5-flash",
 ];
 
 export function getAiKey(): string | undefined {
@@ -52,7 +51,7 @@ export function getActiveAiModel(): string {
     return process.env.AI_MODEL || "google/gemma-4-26b-a4b-it:free (OpenRouter)";
   }
   if (key.startsWith("sk-")) return "gpt-4o";
-  return "gemini-2.5-flash";
+  return "gemini-2.5-flash-lite (Google Gemini)";
 }
 
 /** Robust JSON extractor that handles markdown codeblocks, reasoning text, and preambles */
@@ -196,6 +195,7 @@ export async function callAiStructured<T = unknown>(params: {
       const response = await fetch(geminiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(12000),
         body: JSON.stringify({
           contents: [
             {
@@ -309,6 +309,7 @@ export async function callAiText(params: {
       const response = await fetch(geminiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(12000),
         body: JSON.stringify({
           contents: [
             {
