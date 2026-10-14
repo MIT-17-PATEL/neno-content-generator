@@ -41,3 +41,5 @@ scratch/
 /public/uploads/
 public/uploads/
 *.svg
+!/public/favicon.svg
+!/src/app/icon.svg

@@ -17,6 +17,7 @@ import {
 import { useAuth } from "@/features/auth/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { NenoLogo } from "@/components/brand/neno-logo";
 
 function SignInForm() {
   const router = useRouter();
@@ -135,9 +136,7 @@ function SignInForm() {
   return (
     <Card className="w-full max-w-sm p-6 sm:p-8 border border-slate-200/90 bg-white shadow-sm rounded-lg">
       <CardHeader className="text-center pb-6 p-0">
-        <div className="mx-auto h-10 w-10 rounded-lg bg-orange-500 flex items-center justify-center text-white shadow-sm mb-3">
-          <Sparkles className="h-5 w-5" />
-        </div>
+        <NenoLogo className="mx-auto h-11 w-11 rounded-xl shadow-md mb-3" />
         <CardTitle className="text-xl font-bold tracking-tight text-slate-900">
           Sign in to Studio
         </CardTitle>

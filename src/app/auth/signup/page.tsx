@@ -17,6 +17,7 @@ import {
 import { useAuth } from "@/features/auth/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { NenoLogo } from "@/components/brand/neno-logo";
 
 export default function SignUpPage() {
   const { signUp } = useAuth();
@@ -88,9 +89,7 @@ export default function SignUpPage() {
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center py-12 px-4 sm:px-6 lg:px-8">
       {/* Brand Header */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center mb-6">
-        <div className="inline-flex items-center justify-center h-10 w-10 rounded-lg bg-orange-600 text-white font-bold text-lg mb-3 shadow-sm">
-          AI
-        </div>
+        <NenoLogo className="inline-block h-12 w-12 rounded-xl mb-3 shadow-md" />
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">
           AI Content Studio
         </h1>

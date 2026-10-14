@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, PhoneCall, Sparkles, ChevronRight, Layers, ArrowRight } from "lucide-react";
+import { NenoLogo } from "@/components/brand/neno-logo";
 
 export function PublicHeader() {
   const pathname = usePathname();
@@ -29,13 +30,7 @@ export function PublicHeader() {
           <nav className="flex items-center justify-between">
             {/* Brand Logo */}
             <Link href="/blog-with-sidebar" className="flex items-center gap-2.5 group">
-              <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-sky-500 via-indigo-500 to-cyan-400 p-[1px] shadow-lg shadow-sky-500/20 group-hover:scale-105 transition-transform">
-                <div className="h-full w-full bg-slate-950 rounded-[11px] flex items-center justify-center">
-                  <span className="font-bold font-mono text-sm bg-gradient-to-r from-sky-400 to-indigo-300 bg-clip-text text-transparent">
-                    N
-                  </span>
-                </div>
-              </div>
+              <NenoLogo className="h-9 w-9 rounded-xl shadow-lg shadow-sky-500/20 group-hover:scale-105 transition-transform shrink-0" />
               <div className="flex flex-col">
                 <span className="font-bold text-base tracking-tight text-white group-hover:text-sky-400 transition-colors">
                   Neno Technology

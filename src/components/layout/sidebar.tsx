@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/auth-context";
 import { WorkspaceSwitcher } from "@/components/layout/workspace-switcher";
+import { NenoLogo } from "@/components/brand/neno-logo";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -42,9 +43,7 @@ export function Sidebar() {
     <aside className="w-60 border-r border-slate-200 bg-white flex flex-col shrink-0 min-h-screen">
       {/* Brand Header */}
       <div className="h-16 flex items-center px-5 border-b border-slate-200 gap-3">
-        <div className="h-8 w-8 rounded-lg bg-orange-500 flex items-center justify-center text-white shadow-sm shrink-0">
-          <Sparkles className="h-4 w-4" />
-        </div>
+        <NenoLogo className="h-9 w-9 shrink-0 rounded-xl shadow-md" />
         <div className="flex flex-col min-w-0">
           <span className="font-bold text-sm tracking-tight text-slate-900 truncate">
             AI Content Studio

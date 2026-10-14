@@ -6,6 +6,13 @@ const PUBLIC_PATHS = [
   "/auth/signup",
   "/_next",
   "/favicon.ico",
+  "/favicon.svg",
+  "/icon.svg",
+  "/icon.png",
+  "/apple-touch-icon.png",
+  "/apple-icon.png",
+  "/icon",
+  "/apple-icon",
   "/api/auth/signin",
   "/api/auth/signup",
   "/api/blogs",
@@ -115,8 +122,8 @@ export const config = {
      * Match all request paths except for static files:
      * - _next/static (static files)
      * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
+     * - favicon and icon files
      */
-    "/((?!_next/static|_next/image|favicon.ico).*)",
+    "/((?!_next/static|_next/image|favicon.ico|favicon.svg|icon.svg|icon.png|apple-touch-icon.png|apple-icon.png|icon|apple-icon).*)",
   ],
 };
