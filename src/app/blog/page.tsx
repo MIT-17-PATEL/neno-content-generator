@@ -92,6 +92,7 @@ export default function BlogManagementPage() {
   const [actionModalOpen, setActionModalOpen] = useState(false);
 
   const [websiteModalOpen, setWebsiteModalOpen] = useState(false);
+  const [targetWebsiteUrl, setTargetWebsiteUrl] = useState<string>("http://localhost:3001");
   const [websiteBlogs, setWebsiteBlogs] = useState<Array<{ id: string; title: string; slug: string; category?: string }>>([]);
   const [isLoadingWebsiteBlogs, setIsLoadingWebsiteBlogs] = useState(false);
   const [isSyncingWebsite, setIsSyncingWebsite] = useState(false);
@@ -249,9 +250,14 @@ export default function BlogManagementPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspaceId: activeWorkspace?.id, id: it.id }),
       });
-      if (res.ok) return { success: true };
       const data = await res.json().catch(() => ({}));
-      return { success: false, error: data.error || "Unable to publish this item." };
+      if (res.ok && data.success) return { success: true };
+      return {
+        success: false,
+        error: data.savedLocally
+          ? `Saved in Content Engine, but NOT published to website: ${data.error || "Sync failed"}`
+          : data.error || "Unable to publish this item.",
+      };
     }
   };
 
@@ -263,11 +269,48 @@ export default function BlogManagementPage() {
       if (res.ok) {
         const data = await res.json();
         setWebsiteBlogs(data.websiteBlogs || []);
+        if (data.targetWebsiteUrl) {
+          setTargetWebsiteUrl(data.targetWebsiteUrl);
+        }
       }
     } catch {
       showToast("Could not connect to live website", "error");
     } finally {
       setIsLoadingWebsiteBlogs(false);
+    }
+  };
+
+  const handlePushMissingBlogs = async () => {
+    if (!activeWorkspace) return;
+    setIsSyncingWebsite(true);
+    try {
+      const res = await fetch("/api/admin/blogs/sync-website", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId: activeWorkspace.id, action: "push-missing" }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(data.message || "Pushed blogs to website successfully!");
+        fetchBlogs();
+        fetchWebsiteBlogs();
+      } else if (data.pushedCount > 0) {
+        showToast(
+          `Pushed ${data.pushedCount} blog(s), but ${data.failedCount} failed: ${data.errors?.[0]?.reason || "Sync error"}`,
+          "error"
+        );
+        fetchBlogs();
+        fetchWebsiteBlogs();
+      } else {
+        showToast(
+          data.error || data.errors?.[0]?.reason || "Failed to push blogs to website",
+          "error"
+        );
+      }
+    } catch {
+      showToast("Network error syncing blogs to website", "error");
+    } finally {
+      setIsSyncingWebsite(false);
     }
   };
 
@@ -296,7 +339,7 @@ export default function BlogManagementPage() {
   };
 
   const handleDeleteFromWebsiteSingle = async (wb: { id: string; slug: string; title: string }) => {
-    if (!confirm(`Delete "${wb.title}" directly from the live website?`)) return;
+    if (!confirm(`Delete "${wb.title}" directly from the live website (${targetWebsiteUrl})?`)) return;
     setIsSyncingWebsite(true);
     try {
       const res = await fetch("/api/admin/blogs/sync-website", {
@@ -325,9 +368,16 @@ export default function BlogManagementPage() {
   };
 
   const handlePurgeAllWebsite = async () => {
-    if (!confirm("⚠️ WARNING: This will delete ALL published articles from the live website (localhost:3000). Are you sure?")) {
+    const confirmation = prompt(
+      `⚠️ DANGER: This will permanently delete ALL published articles from the live website (${targetWebsiteUrl})!\n\nTo confirm this irreversible action, type "DELETE":`
+    );
+    if (confirmation !== "DELETE") {
+      if (confirmation !== null) {
+        showToast("Purge cancelled: confirmation text did not match 'DELETE'", "error");
+      }
       return;
     }
+
     setIsSyncingWebsite(true);
     try {
       const res = await fetch("/api/admin/blogs/sync-website", {
@@ -362,6 +412,37 @@ export default function BlogManagementPage() {
       default:
         return <Badge variant="secondary">Draft</Badge>;
     }
+  };
+
+  const getSyncBadge = (item: ContentItem) => {
+    const syncedAt = item.website_synced_at || (item as unknown as { websiteSyncedAt?: string }).websiteSyncedAt;
+    const syncErr = item.website_sync_error || (item as unknown as { websiteSyncError?: string }).websiteSyncError;
+
+    if (syncedAt && !syncErr) {
+      return (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          <span>On website</span>
+        </span>
+      );
+    }
+    if (syncErr) {
+      return (
+        <span
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-50 text-rose-700 border border-rose-200 cursor-help"
+          title={`Website Sync Error: ${syncErr}`}
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+          <span>Sync failed</span>
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500 border border-slate-200">
+        <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+        <span>Not on website</span>
+      </span>
+    );
   };
 
   const selectedItems = items.filter((item) => selectedIds.includes(item.id));
@@ -691,7 +772,12 @@ export default function BlogManagementPage() {
                         </TableCell>
 
                         {/* Status */}
-                        <TableCell>{getStatusBadge(item.status)}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1 items-start">
+                            {getStatusBadge(item.status)}
+                            {getSyncBadge(item)}
+                          </div>
+                        </TableCell>
 
                         {/* Published Date */}
                         <TableCell className="text-xs text-slate-500">
@@ -718,7 +804,7 @@ export default function BlogManagementPage() {
 
                               {isPublished && (
                                 <DropdownMenuItem
-                                  onClick={() => window.open(`http://localhost:3000/blog-single/${item.slug}`, "_blank")}
+                                  onClick={() => window.open(`${targetWebsiteUrl}/blog-single/${item.slug}`, "_blank")}
                                 >
                                   <ExternalLink className="h-3.5 w-3.5 mr-2 text-slate-500" />
                                   <span>View on Website</span>
@@ -788,7 +874,7 @@ export default function BlogManagementPage() {
               <div className="flex items-center gap-2">
                 <Globe className="h-5 w-5 text-emerald-600" />
                 <DialogTitle className="text-base font-bold text-slate-900">
-                  Live Website Synchronization (localhost:3000)
+                  Live Website Synchronization ({targetWebsiteUrl})
                 </DialogTitle>
               </div>
               <Button
@@ -803,21 +889,31 @@ export default function BlogManagementPage() {
               </Button>
             </div>
             <DialogDescription className="text-xs text-slate-500">
-              Directly view, import, or purge blogs currently stored in your live Next.js website&apos;s database.
+              Directly synchronize, push approved articles, or purge blogs on your live website.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 pt-1">
-            <div className="flex items-center justify-between gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+            <div className="flex items-center justify-between gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg flex-wrap">
               <div>
                 <span className="text-xs font-semibold text-slate-900 block">
                   {isLoadingWebsiteBlogs ? "Scanning website..." : `${websiteBlogs.length} Articles Live on Website`}
                 </span>
                 <span className="text-[11px] text-slate-500">
-                  Import them into Content Studio or purge outdated records.
+                  Push missing approved blogs or import existing website articles.
                 </span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePushMissingBlogs}
+                  disabled={isSyncingWebsite}
+                  className="h-8 text-xs font-semibold gap-1.5 bg-orange-50 border-orange-300 text-orange-800 hover:bg-orange-100"
+                >
+                  {isSyncingWebsite ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5 text-orange-600" />}
+                  <span>Push Missing to Website</span>
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -825,7 +921,7 @@ export default function BlogManagementPage() {
                   disabled={isSyncingWebsite || websiteBlogs.length === 0}
                   className="h-8 text-xs font-semibold gap-1.5 bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
                 >
-                  {isSyncingWebsite ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5 text-orange-600" />}
+                  {isSyncingWebsite ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5 text-slate-600" />}
                   <span>Import All to Studio</span>
                 </Button>
                 <Button

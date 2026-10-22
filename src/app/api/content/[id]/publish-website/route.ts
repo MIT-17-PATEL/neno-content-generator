@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, requireWorkspaceAccess } from "@/server/auth-guard";
 import { ContentService } from "@/services/content-service";
 import { VersionService } from "@/services/version-service";
-import { ExportFormatter } from "@/lib/export/export-formatter";
-import { dataStore } from "@/server/data-store";
+import { WebsiteSyncService } from "@/lib/export/website-sync";
 import { ContentItem, ContentVersion } from "@/types";
 
 export async function POST(
@@ -40,7 +39,7 @@ export async function POST(
       type: dbItem.type,
       title: dbItem.title,
       slug: dbItem.slug,
-      status: dbItem.status,
+      status: "approved",
       category: dbItem.category,
       excerpt: dbItem.excerpt,
       currentVersionId: dbItem.current_version_id,
@@ -60,133 +59,47 @@ export async function POST(
       createdAt: new Date(dbVersion.created_at).toISOString(),
     };
 
-    const brand = await dataStore.getBrandSettings(workspaceId);
-    const brandName = brand?.brand_name || "Neno Technology";
+    // Update status in local database
+    await ContentService.updateStatus(workspaceId, params.id, "approved");
 
-    // Format into 1:1 Website Form Schema
-    const exportResult = ExportFormatter.format({
-      item,
-      version: currentVersion,
-      format: "json",
-      brandName,
-      authorName: auth.user.name || "Mit Patel",
-    });
-
-    const blogPayload = JSON.parse(exportResult.content);
-    const htmlBody = ExportFormatter.markdownToHtmlBody(currentVersion.content);
-
-    // Target Neno Website Base URL & Config
-    const websiteBaseUrl = (
-      process.env.NENO_WEBSITE_URL ||
-      process.env.NENO_WEBSITE_API_URL ||
-      "http://localhost:3000"
-    ).replace(/\/+$/, "").replace(/\/api\/admin\/blogs$/, "").replace(/\/api\/blogs$/, "");
-
-    const adminEmail = body.adminEmail || process.env.NENO_WEBSITE_ADMIN_EMAIL || "admin@neno.tech";
-    const adminPassword = body.adminPassword || process.env.NENO_WEBSITE_ADMIN_PASSWORD || "admin123";
-
-    let sessionCookie = process.env.NENO_ADMIN_SESSION || "";
-    let authErrorDetail = "";
-
-    // 1. Authenticate to obtain neno-admin-session cookie if not already set
-    if (!sessionCookie) {
-      try {
-        const authRes = await fetch(`${websiteBaseUrl}/api/admin/auth`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: adminEmail,
-            password: adminPassword,
-          }),
-        });
-
-        if (authRes.ok) {
-          const setCookieHeader = authRes.headers.get("set-cookie");
-          if (setCookieHeader) {
-            const match = setCookieHeader.match(/neno-admin-session=([^;]+)/);
-            sessionCookie = match ? `neno-admin-session=${match[1]}` : setCookieHeader.split(";")[0];
-          }
-        } else {
-          const errBody = await authRes.text().catch(() => "");
-          authErrorDetail = `Auth status ${authRes.status}: ${errBody || authRes.statusText}`;
-        }
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        authErrorDetail = `Cannot reach ${websiteBaseUrl}/api/admin/auth: ${msg}`;
-      }
-    }
-
-    // 2. Prepare payload exactly matching website schema with clean formatting
-    const cleanCategory = ExportFormatter.cleanCategoryName(item.category);
-    const cleanContent = ExportFormatter.formatCleanArticleMarkdown(currentVersion.content, item.title);
-
-    const targetPayload = {
-      title: item.title,
-      slug: item.slug,
-      category: cleanCategory,
-      author: auth.user.name || brandName || "Neno AI Lab",
-      shortDescription: item.excerpt || "",
-      content: cleanContent,
-      blogContent: cleanContent,
-      status: "Published",
-      publishDate: blogPayload.publishDate,
-      readingTime: blogPayload.readingTime,
-      thumb: currentVersion.seoMetadata?.featuredImageBrief || "",
-      thumbFull: currentVersion.seoMetadata?.featuredImageBrief || "",
-      buttonText: "Read Article",
-      buttonLink: `/blog-single/${item.slug}`,
-    };
-
-    let publishedSuccessfully = false;
-    let targetResponse: unknown = null;
-    let targetEndpointUsed = `${websiteBaseUrl}/api/admin/blogs`;
-    let publishErrorDetail = "";
-
-    // 3. Dispatch POST /api/admin/blogs
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-      if (sessionCookie) {
-        headers["Cookie"] = sessionCookie;
-      }
-
-      const response = await fetch(targetEndpointUsed, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(targetPayload),
+      const syncResult = await WebsiteSyncService.publishBlog(item, currentVersion, workspaceId, auth.user.name);
+      await ContentService.updateSyncState(workspaceId, params.id, {
+        website_synced_at: new Date(),
+        website_sync_error: null,
       });
 
-      if (response.ok) {
-        publishedSuccessfully = true;
-        targetResponse = await response.json().catch(() => ({ success: true }));
-      } else {
-        const errBody = await response.text().catch(() => "");
-        publishErrorDetail = `Website rejected request (${response.status}): ${errBody || response.statusText}`;
-      }
+      return NextResponse.json({
+        success: true,
+        savedLocally: true,
+        websiteSync: "synced",
+        publishedToWebsite: true,
+        endpointUsed: syncResult.endpointUsed,
+        websiteUrl: syncResult.websiteUrl,
+        responseFromWebsite: syncResult.response,
+      });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      publishErrorDetail = `Connection to ${targetEndpointUsed} failed: ${msg}`;
-    }
+      const errMsg = err instanceof Error ? err.message : String(err);
+      await ContentService.updateSyncState(workspaceId, params.id, {
+        website_synced_at: null,
+        website_sync_error: errMsg,
+      });
 
-    // Update status in local database
-    if (publishedSuccessfully) {
-      await ContentService.updateStatus(workspaceId, params.id, "approved");
+      return NextResponse.json(
+        {
+          success: false,
+          savedLocally: true,
+          websiteSync: "failed",
+          error: errMsg,
+          errorDetail: errMsg,
+          publishedToWebsite: false,
+        },
+        { status: 502 }
+      );
     }
-
-    return NextResponse.json({
-      success: true,
-      publishedToWebsite: publishedSuccessfully,
-      endpointUsed: targetEndpointUsed,
-      blogPayload: targetPayload,
-      websiteUrl: `${websiteBaseUrl}/blog-single/${item.slug}`,
-      websiteListingUrl: `${websiteBaseUrl}/blog`,
-      responseFromWebsite: targetResponse,
-      errorDetail: publishErrorDetail || authErrorDetail || null,
-    });
   } catch (error: unknown) {
     console.error("Publish to website error:", error);
     const message = error instanceof Error ? error.message : "Publishing failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message, success: false, savedLocally: false }, { status: 500 });
   }
 }

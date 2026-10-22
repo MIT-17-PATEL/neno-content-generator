@@ -26,16 +26,22 @@ export async function runMigrations() {
     return;
   }
 
-  const migrationFile = path.join(process.cwd(), "src/db/migrations/001_initial_schema.sql");
-  const sql = fs.readFileSync(migrationFile, "utf-8");
+  const migrationsDir = path.join(process.cwd(), "src/db/migrations");
+  const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith(".sql")).sort();
 
-  try {
-    await db.query(sql);
-    console.log("✅ Database migrations completed successfully!");
-  } catch (err) {
-    console.error("❌ Migration error:", err);
-    throw err;
+  for (const file of files) {
+    const migrationFile = path.join(migrationsDir, file);
+    const sql = fs.readFileSync(migrationFile, "utf-8");
+    try {
+      console.log(`Applying migration: ${file}...`);
+      await db.query(sql);
+      console.log(`✅ Applied ${file}`);
+    } catch (err) {
+      console.error(`❌ Migration error in ${file}:`, err);
+      throw err;
+    }
   }
+  console.log("✅ All database migrations completed successfully!");
 }
 
 if (require.main === module) {

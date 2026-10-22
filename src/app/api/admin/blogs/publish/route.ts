@@ -23,6 +23,9 @@ export async function POST(req: NextRequest) {
     }
 
     const results = [];
+    let hasSyncFailure = false;
+    let firstSyncError = "";
+
     for (const id of ids) {
       const dbItem = await ContentService.getById(workspaceId, id);
       if (!dbItem) continue;
@@ -36,6 +39,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      // Always mark as approved locally in Content Engine
       await ContentService.updateStatus(workspaceId, id, "approved");
 
       const item: ContentItem = {
@@ -63,8 +67,32 @@ export async function POST(req: NextRequest) {
         createdAt: new Date(dbVersion.created_at).toISOString(),
       };
 
-      const syncResult = await WebsiteSyncService.publishBlog(item, version, workspaceId, auth.user.name);
-      results.push({ id, title: item.title, ...syncResult });
+      try {
+        const syncResult = await WebsiteSyncService.publishBlog(item, version, workspaceId, auth.user.name);
+        await ContentService.updateSyncState(workspaceId, id, {
+          website_synced_at: new Date(),
+          website_sync_error: null,
+        });
+        results.push({ id, title: item.title, savedLocally: true, websiteSync: "synced", ...syncResult });
+      } catch (err: unknown) {
+        hasSyncFailure = true;
+        const errMsg = err instanceof Error ? err.message : String(err);
+        if (!firstSyncError) firstSyncError = errMsg;
+
+        await ContentService.updateSyncState(workspaceId, id, {
+          website_synced_at: null,
+          website_sync_error: errMsg,
+        });
+
+        results.push({
+          id,
+          title: item.title,
+          success: false,
+          savedLocally: true,
+          websiteSync: "failed",
+          error: errMsg,
+        });
+      }
 
       try {
         const { revalidateBlogCache } = await import("@/lib/cache/revalidate");
@@ -74,15 +102,34 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const publishedCount = results.filter((r) => r.success).length;
+
+    if (hasSyncFailure) {
+      return NextResponse.json(
+        {
+          success: false,
+          savedLocally: true,
+          websiteSync: "failed",
+          error: firstSyncError,
+          publishedCount,
+          totalRequested: ids.length,
+          results,
+        },
+        { status: 502 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
-      publishedCount: results.filter((r) => r.success).length,
+      savedLocally: true,
+      websiteSync: "synced",
+      publishedCount,
       totalRequested: ids.length,
       results,
     });
   } catch (error: unknown) {
     console.error("Bulk publish error:", error);
     const msg = error instanceof Error ? error.message : "Publishing failed";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: msg, success: false, savedLocally: false }, { status: 500 });
   }
 }

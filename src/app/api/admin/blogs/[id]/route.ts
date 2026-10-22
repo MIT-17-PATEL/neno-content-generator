@@ -90,6 +90,9 @@ export async function PUT(
     });
 
     // If published, sync with website
+    let websiteSyncStatus: "synced" | "failed" | "not_attempted" = "not_attempted";
+    let websiteSyncError: string | null = null;
+
     if (mappedStatus === "approved" || body.publishNow) {
       const itemFormatted: ContentItem = {
         id: updatedItem?.id || params.id,
@@ -114,7 +117,22 @@ export async function PUT(
         createdBy: newVersion.created_by,
         createdAt: new Date(newVersion.created_at).toISOString(),
       };
-      await WebsiteSyncService.publishBlog(itemFormatted, versionFormatted, workspaceId, body.author || auth.user.name);
+
+      try {
+        await WebsiteSyncService.publishBlog(itemFormatted, versionFormatted, workspaceId, body.author || auth.user.name);
+        websiteSyncStatus = "synced";
+        await ContentService.updateSyncState(workspaceId, params.id, {
+          website_synced_at: new Date(),
+          website_sync_error: null,
+        });
+      } catch (err: unknown) {
+        websiteSyncStatus = "failed";
+        websiteSyncError = err instanceof Error ? err.message : String(err);
+        await ContentService.updateSyncState(workspaceId, params.id, {
+          website_synced_at: null,
+          website_sync_error: websiteSyncError,
+        });
+      }
     }
 
     // Revalidate Next.js cache for public blog pages
@@ -125,8 +143,24 @@ export async function PUT(
       console.warn("Revalidation warning:", e);
     }
 
+    if (websiteSyncStatus === "failed") {
+      return NextResponse.json(
+        {
+          success: false,
+          savedLocally: true,
+          websiteSync: "failed",
+          error: websiteSyncError || "Failed to publish to website",
+          item: updatedItem,
+          version: newVersion,
+        },
+        { status: 502 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
+      savedLocally: true,
+      websiteSync: websiteSyncStatus,
       item: updatedItem,
       version: newVersion,
     });
@@ -154,9 +188,12 @@ export async function DELETE(
 
   // 1. Immediately delete / unpublish from live website
   if (item.slug) {
-    await WebsiteSyncService.deleteFromWebsite(item.slug, item.title);
+    try {
+      await WebsiteSyncService.deleteFromWebsite(item.slug);
+    } catch (err) {
+      console.warn("Website delete notice:", err);
+    }
   }
-  await WebsiteSyncService.deleteFromWebsite(item.id, item.title);
 
   // 2. Soft-delete locally into Trash (7-day recovery period)
   await ContentService.softDelete(workspaceId, params.id, auth.user.userId);

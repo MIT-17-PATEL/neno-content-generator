@@ -301,7 +301,13 @@ export default function CaseStudiesPage() {
   };
 
   const handlePurgeAllWebsite = async () => {
-    if (!confirm("⚠️ WARNING: This will delete ALL case studies from the live website (localhost:3000). Are you sure?")) {
+    const confirmation = prompt(
+      '⚠️ DANGER: This will permanently delete ALL case studies from the live website!\n\nTo confirm this irreversible action, type "DELETE":'
+    );
+    if (confirmation !== "DELETE") {
+      if (confirmation !== null) {
+        showToast("Purge cancelled: confirmation text did not match 'DELETE'", "error");
+      }
       return;
     }
     setIsSyncingWebsite(true);

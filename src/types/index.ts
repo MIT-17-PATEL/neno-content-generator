@@ -52,6 +52,10 @@ export interface ContentItem {
   deletedAt?: string | null;
   deletedBy?: string | null;
   permanentDeleteAt?: string | null;
+  websiteSyncedAt?: string | null;
+  websiteSyncError?: string | null;
+  website_synced_at?: string | Date | null;
+  website_sync_error?: string | null;
   createdAt: string;
   updatedAt: string;
 }

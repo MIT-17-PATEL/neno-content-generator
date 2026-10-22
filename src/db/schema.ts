@@ -49,6 +49,8 @@ export interface DbContentItem {
   deleted_at?: Date | null;
   deleted_by?: string | null;
   permanent_delete_at?: Date | null;
+  website_synced_at?: Date | null;
+  website_sync_error?: string | null;
   created_at: Date;
   updated_at: Date;
 }

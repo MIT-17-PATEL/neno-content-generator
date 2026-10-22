@@ -104,6 +104,9 @@ export async function POST(req: NextRequest) {
     });
 
     // If publishing immediately
+    let websiteSyncStatus: "synced" | "failed" | "not_attempted" = "not_attempted";
+    let websiteSyncError: string | null = null;
+
     if (body.status === "Published" || body.status === "approved" || body.publishNow) {
       await ContentService.updateStatus(workspaceId, item.id, "approved");
       item.status = "approved";
@@ -130,7 +133,22 @@ export async function POST(req: NextRequest) {
         createdBy: version.created_by,
         createdAt: new Date(version.created_at).toISOString(),
       };
-      await WebsiteSyncService.publishBlog(itemFormatted, versionFormatted, workspaceId, body.author || auth.user.name);
+
+      try {
+        await WebsiteSyncService.publishBlog(itemFormatted, versionFormatted, workspaceId, body.author || auth.user.name);
+        websiteSyncStatus = "synced";
+        await ContentService.updateSyncState(workspaceId, item.id, {
+          website_synced_at: new Date(),
+          website_sync_error: null,
+        });
+      } catch (err: unknown) {
+        websiteSyncStatus = "failed";
+        websiteSyncError = err instanceof Error ? err.message : String(err);
+        await ContentService.updateSyncState(workspaceId, item.id, {
+          website_synced_at: null,
+          website_sync_error: websiteSyncError,
+        });
+      }
     }
 
     // Revalidate Next.js cache for public blog pages
@@ -141,8 +159,24 @@ export async function POST(req: NextRequest) {
       console.warn("Revalidation warning:", e);
     }
 
+    if (websiteSyncStatus === "failed") {
+      return NextResponse.json(
+        {
+          success: false,
+          savedLocally: true,
+          websiteSync: "failed",
+          error: websiteSyncError || "Failed to publish to website",
+          item,
+          version,
+        },
+        { status: 502 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
+      savedLocally: true,
+      websiteSync: websiteSyncStatus,
       item,
       version,
     });

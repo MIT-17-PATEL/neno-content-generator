@@ -10,7 +10,8 @@
     "type-check": "tsc --noEmit",
     "test": "tsx tests/runner.ts",
     "db:migrate": "tsx src/db/migrate.ts",
-    "db:seed": "tsx src/db/seed.ts"
+    "db:seed": "tsx src/db/seed.ts",
+    "sync:blogs": "node scripts/sync-blogs.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

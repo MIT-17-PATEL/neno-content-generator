@@ -3,6 +3,7 @@ import { requireAuth, requireWorkspaceAccess } from "@/server/auth-guard";
 import { ContentService } from "@/services/content-service";
 import { VersionService } from "@/services/version-service";
 import { ResearchService } from "@/services/research-service";
+import { WebsiteSyncService } from "@/lib/export/website-sync";
 import { z } from "zod";
 
 const patchContentSchema = z.object({
@@ -112,58 +113,14 @@ export async function DELETE(
     return NextResponse.json({ error: "Content item not found" }, { status: 404 });
   }
 
-  // 1. Synchronize Deletion with Neno Tech Website (DELETE /api/admin/blogs/[id])
-  const websiteBaseUrl = (
-    process.env.NENO_WEBSITE_URL ||
-    process.env.NENO_WEBSITE_API_URL ||
-    "http://localhost:3000"
-  ).replace(/\/+$/, "").replace(/\/api\/admin\/blogs$/, "").replace(/\/api\/blogs$/, "");
-
-  const adminEmail = process.env.NENO_WEBSITE_ADMIN_EMAIL || "admin@neno.tech";
-  const adminPassword = process.env.NENO_WEBSITE_ADMIN_PASSWORD || "admin123";
-  let sessionCookie = process.env.NENO_ADMIN_SESSION || "";
-
-  if (!sessionCookie) {
-    try {
-      const authRes = await fetch(`${websiteBaseUrl}/api/admin/auth`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: adminEmail, password: adminPassword }),
-      });
-      if (authRes.ok) {
-        const setCookieHeader = authRes.headers.get("set-cookie");
-        if (setCookieHeader) {
-          const match = setCookieHeader.match(/neno-admin-session=([^;]+)/);
-          sessionCookie = match ? `neno-admin-session=${match[1]}` : setCookieHeader.split(";")[0];
-        }
-      }
-    } catch {
-      // Ignore website auth errors if website is temporarily offline
-    }
-  }
-
-  // Attempt delete on target website by slug and by id
-  const headers: Record<string, string> = {};
-  if (sessionCookie) headers["Cookie"] = sessionCookie;
-
-  const deleteEndpoints = [
-    item.slug ? `${websiteBaseUrl}/api/admin/blogs/${encodeURIComponent(item.slug)}` : null,
-    item.id ? `${websiteBaseUrl}/api/admin/blogs/${encodeURIComponent(item.id)}` : null,
-  ].filter(Boolean) as string[];
-
+  // 1. Synchronize Deletion with Live Website
   let deletedFromWebsite = false;
-  for (const url of deleteEndpoints) {
+  if (item.slug) {
     try {
-      const res = await fetch(url, {
-        method: "DELETE",
-        headers,
-      });
-      if (res.ok) {
-        deletedFromWebsite = true;
-        break;
-      }
-    } catch {
-      // Continue to next endpoint
+      await WebsiteSyncService.deleteFromWebsite(item.slug);
+      deletedFromWebsite = true;
+    } catch (err) {
+      console.warn("Website delete notice:", err);
     }
   }
 

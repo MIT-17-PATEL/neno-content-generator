@@ -309,8 +309,8 @@ export function BlogEditor({ initialId }: BlogEditorProps) {
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
-      if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
         if (publishNow) {
           showToast("Published directly to Neno Website!");
           setStatus("Published");
@@ -321,7 +321,15 @@ export function BlogEditor({ initialId }: BlogEditorProps) {
           router.push(`/blog/${data.item.id}/edit`);
         }
       } else {
-        showToast(data.error || "Failed to save blog", "error");
+        if (publishNow && data.savedLocally) {
+          setStatus("Published");
+          showToast(
+            `Saved in Content Engine, but NOT published to website: ${data.error || "Website sync failed"}`,
+            "error"
+          );
+        } else {
+          showToast(data.error || "Failed to save blog", "error");
+        }
       }
     } catch (err) {
       console.error("Save error:", err);
@@ -911,7 +919,7 @@ export function BlogEditor({ initialId }: BlogEditorProps) {
                   <span>Target Publishing Endpoint</span>
                 </div>
                 <p className="text-xs text-orange-800 leading-relaxed">
-                  Publishing synchronizes this article with <code className="bg-orange-100 px-1 py-0.5 rounded font-mono text-[11px]">POST http://localhost:3000/api/admin/blogs</code> and purges Next.js ISR tags (<code className="bg-orange-100 px-1 py-0.5 rounded font-mono text-[11px]">blogs</code>, <code className="bg-orange-100 px-1 py-0.5 rounded font-mono text-[11px]">published-blogs</code>).
+                  Publishing synchronizes this article directly with <code className="bg-orange-100 px-1 py-0.5 rounded font-mono text-[11px]">POST /api/integrations/content-engine/blogs</code> using header <code className="bg-orange-100 px-1 py-0.5 rounded font-mono text-[11px]">x-api-key</code>.
                 </p>
               </div>
             </CardContent>

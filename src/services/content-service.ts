@@ -463,6 +463,39 @@ export class ContentService {
     return item;
   }
 
+  static async updateSyncState(
+    workspaceId: string,
+    contentId: string,
+    syncData: {
+      website_synced_at?: Date | null;
+      website_sync_error?: string | null;
+    }
+  ): Promise<DbContentItem | null> {
+    if (db.isConfigured) {
+      const res = await db.query<DbContentItem>(
+        `UPDATE content_items 
+         SET website_synced_at = $1, website_sync_error = $2, updated_at = NOW() 
+         WHERE id = $3 AND workspace_id = $4 
+         RETURNING *`,
+        [
+          syncData.website_synced_at !== undefined ? syncData.website_synced_at : null,
+          syncData.website_sync_error !== undefined ? syncData.website_sync_error : null,
+          contentId,
+          workspaceId,
+        ]
+      );
+      return res.rows[0] || null;
+    }
+
+    const item = memoryContent.get(contentId);
+    if (!item || (workspaceId && item.workspace_id !== workspaceId)) return null;
+    item.website_synced_at = syncData.website_synced_at !== undefined ? syncData.website_synced_at : null;
+    item.website_sync_error = syncData.website_sync_error !== undefined ? syncData.website_sync_error : null;
+    item.updated_at = new Date();
+    memoryContent.set(contentId, item);
+    return item;
+  }
+
   static async updateItem(
     workspaceId: string,
     contentId: string,
