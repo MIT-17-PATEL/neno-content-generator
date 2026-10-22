@@ -11,6 +11,8 @@ export interface WebsiteSyncResult {
   response?: unknown;
 }
 
+const PUBLISH_TIMEOUT_MS = 60000;
+
 export class WebsiteSyncService {
   public static getBaseConfig() {
     const websiteBaseUrl = (
@@ -113,7 +115,9 @@ export class WebsiteSyncService {
   /**
    * Publish blog to the website using the dedicated integration endpoint:
    * POST /api/integrations/content-engine/blogs with header `x-api-key`
-   * 15s timeout, 1 retry, throws on failure.
+   * 60s timeout per attempt (the website uploads the image to S3, then writes via the
+   * API Gateway Lambda), 1 retry, throws on failure. The website upserts by slug, so
+   * a retry after a timeout cannot create a duplicate post.
    */
   static async publishBlog(
     item: ContentItem,
@@ -187,7 +191,7 @@ export class WebsiteSyncService {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const timeoutId = setTimeout(() => controller.abort(), PUBLISH_TIMEOUT_MS);
 
         const response = await fetch(targetEndpoint, {
           method: "POST",
@@ -220,7 +224,7 @@ export class WebsiteSyncService {
       } catch (err: unknown) {
         const isAbort = (err as { name?: string })?.name === "AbortError";
         const msg = isAbort
-          ? `Request to ${targetEndpoint} timed out after 15 seconds`
+          ? `Request to ${targetEndpoint} timed out after ${PUBLISH_TIMEOUT_MS / 1000} seconds`
           : err instanceof Error ? err.message : String(err);
         lastError = new Error(msg);
       }
