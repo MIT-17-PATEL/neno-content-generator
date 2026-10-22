@@ -178,6 +178,7 @@ export function BackgroundGenerationProvider({ children }: { children: React.Rea
       startStageTicker(PIPELINE_STAGES_BLOG.length);
 
       const completed: GeneratedBlogResult[] = [];
+      let lastError = "";
 
       try {
         for (let i = 0; i < topics.length; i++) {
@@ -216,19 +217,21 @@ export function BackgroundGenerationProvider({ children }: { children: React.Rea
               });
               setBlogResults([...completed]);
             } else {
-              const errData = await res.json();
+              const errData = await res.json().catch(() => ({}));
               console.error(`Error generating blog "${currentTopic}":`, errData);
+              lastError = `${res.status}: ${errData.error || res.statusText}`;
             }
           } catch (err: unknown) {
             if ((err as Error)?.name === "AbortError") {
               break;
             }
             console.error(`Failed to generate topic "${currentTopic}":`, err);
+            lastError = (err as Error)?.message || String(err);
           }
         }
 
         if (completed.length === 0) {
-          setErrorMessage("Generation failed for all requested topics. Please check your network or API keys.");
+          setErrorMessage(`Generation failed for all requested topics. Last error: ${lastError || "unknown"}`);
         } else {
           setIsCompleted(true);
           setHasUnreadCompletion(true);
@@ -266,6 +269,7 @@ export function BackgroundGenerationProvider({ children }: { children: React.Rea
       startStageTicker(PIPELINE_STAGES_CASE_STUDY.length);
 
       const completed: GeneratedCaseStudyResult[] = [];
+      let lastError = "";
 
       try {
         for (let i = 0; i < items.length; i++) {
@@ -304,19 +308,21 @@ export function BackgroundGenerationProvider({ children }: { children: React.Rea
               });
               setCaseStudyResults([...completed]);
             } else {
-              const errData = await res.json();
+              const errData = await res.json().catch(() => ({}));
               console.error(`Error generating case study "${item.industry}":`, errData);
+              lastError = `${res.status}: ${errData.error || res.statusText}`;
             }
           } catch (err: unknown) {
             if ((err as Error)?.name === "AbortError") {
               break;
             }
             console.error(`Failed to generate case study "${item.industry}":`, err);
+            lastError = (err as Error)?.message || String(err);
           }
         }
 
         if (completed.length === 0) {
-          setErrorMessage("Generation failed for all requested case studies. Please check your network or API keys.");
+          setErrorMessage(`Generation failed for all requested case studies. Last error: ${lastError || "unknown"}`);
         } else {
           setIsCompleted(true);
           setHasUnreadCompletion(true);

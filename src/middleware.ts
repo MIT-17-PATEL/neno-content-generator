@@ -1,5 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
+import { jwtVerify } from "jose";
 import { checkRateLimit, RateLimitType } from "@/lib/security/rate-limiter";
+
+// Must match the secret used by src/lib/auth.ts
+const JWT_SECRET = new TextEncoder().encode(
+  process.env.AUTH_SECRET || "ai-content-studio-default-dev-secret-key-32chars"
+);
+
+async function isValidSession(token: string): Promise<boolean> {
+  try {
+    await jwtVerify(token, JWT_SECRET);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const PUBLIC_PATHS = [
   "/auth/signin",
@@ -35,7 +50,7 @@ function isPublicRequestPath(pathname: string): boolean {
   return false;
 }
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const ip = req.ip || req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "127.0.0.1";
 
@@ -86,12 +101,21 @@ export function middleware(req: NextRequest) {
   const isPublic = isPublicRequestPath(pathname);
   const sessionToken = req.cookies.get("ai_studio_session")?.value;
 
-  if (!isPublic && !sessionToken && !pathname.startsWith("/api")) {
+  if (!isPublic && !pathname.startsWith("/api")) {
+    // Verify the token, not just its presence: a stale/forged cookie must not unlock pages
+    const hasValidSession = sessionToken ? await isValidSession(sessionToken) : false;
+    if (hasValidSession) {
+      const response = NextResponse.next();
+      applySecurityHeaders(response);
+      return response;
+    }
+
     const signInUrl = new URL("/auth/signin", req.url);
     if (pathname !== "/" && pathname !== "/auth/signin" && pathname !== "/auth/signup") {
       signInUrl.searchParams.set("from", pathname);
     }
     const response = NextResponse.redirect(signInUrl);
+    if (sessionToken) response.cookies.delete("ai_studio_session");
     applySecurityHeaders(response);
     return response;
   }
