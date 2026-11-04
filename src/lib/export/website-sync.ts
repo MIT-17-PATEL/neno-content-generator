@@ -1,6 +1,7 @@
 import { ContentItem, ContentVersion } from "@/types";
 import { ExportFormatter } from "@/lib/export/export-formatter";
 import { dataStore } from "@/server/data-store";
+import { ImageGenerator } from "@/lib/ai/image-generator";
 
 export interface WebsiteSyncResult {
   success: boolean;
@@ -113,7 +114,7 @@ export class WebsiteSyncService {
   /**
    * Publish blog to the website using the dedicated integration endpoint:
    * POST /api/integrations/content-engine/blogs with header `x-api-key`
-   * 15s timeout, 1 retry, throws on failure.
+   * 60s timeout, 1 retry (not after a timeout), throws on failure.
    */
   static async publishBlog(
     item: ContentItem,
@@ -157,6 +158,7 @@ export class WebsiteSyncService {
       "";
 
     const featuredImgUrl = await this.resolveFeaturedImage(rawImgUrl, item.title);
+    const { thumb, thumbFull } = await ImageGenerator.compressCover(featuredImgUrl, item.slug);
 
     const targetPayload = {
       title: item.title,
@@ -169,8 +171,8 @@ export class WebsiteSyncService {
       status: "Published",
       publishDate: blogPayload.publishDate || new Date().toISOString().split("T")[0],
       readingTime: blogPayload.readingTime || "5 min read",
-      thumb: featuredImgUrl,
-      thumbFull: featuredImgUrl,
+      thumb,
+      thumbFull,
       buttonText: "Read Article",
       buttonLink: `/blog-single/${item.slug}`,
     };
@@ -187,7 +189,8 @@ export class WebsiteSyncService {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        // Website processes the base64 thumbnail server-side; publishes routinely take >15s.
+        const timeoutId = setTimeout(() => controller.abort(), 60000);
 
         const response = await fetch(targetEndpoint, {
           method: "POST",
@@ -220,9 +223,11 @@ export class WebsiteSyncService {
       } catch (err: unknown) {
         const isAbort = (err as { name?: string })?.name === "AbortError";
         const msg = isAbort
-          ? `Request to ${targetEndpoint} timed out after 15 seconds`
+          ? `Request to ${targetEndpoint} timed out after 60 seconds (the website may still finish publishing it)`
           : err instanceof Error ? err.message : String(err);
         lastError = new Error(msg);
+        // Retrying after a timeout re-sends the same heavy upload while the first is likely still running.
+        if (isAbort) break;
       }
 
       if (attempt < maxAttempts) {
@@ -482,7 +487,6 @@ export class WebsiteSyncService {
 
     // Generate dynamic vector artwork fallback
     try {
-      const { ImageGenerator } = await import("@/lib/ai/image-generator");
       const generated = await ImageGenerator.generate({
         topic: title || "Enterprise Engineering",
         articleType: "blog",

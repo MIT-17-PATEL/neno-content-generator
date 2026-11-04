@@ -246,6 +246,39 @@ export class ImageGenerator {
   }
 
   /**
+   * Compress an embedded (data: URI) cover image: thumbFull = max 1200px wide WebP q80, thumb = 400px wide WebP q80.
+   * URLs, empty values and undecodable data are returned unchanged for both, so callers never break on compression.
+   */
+  static async compressCover(src: string, label = ""): Promise<{ thumb: string; thumbFull: string }> {
+    const match = /^data:([^;,]+);base64,(.*)$/s.exec(src || "");
+    if (!match) return { thumb: src, thumbFull: src };
+
+    try {
+      const sharp = (await import("sharp")).default;
+      const input = Buffer.from(match[2], "base64");
+      const { width = 0 } = await sharp(input).metadata();
+      const encode = (w: number) =>
+        sharp(input).resize({ width: w, withoutEnlargement: true }).webp({ quality: 80 }).toBuffer();
+      // A stored cover that is already a <=1200px WebP (e.g. a saved DALL-E image) is reused to avoid a second lossy pass.
+      const reuseFull = match[1] === "image/webp" && width <= 1200;
+      const [full, small] = await Promise.all([reuseFull ? input : encode(1200), encode(400)]);
+
+      const kb = (n: number) => `${(n / 1024).toFixed(1)}KB`;
+      console.log(
+        `[ImageGenerator] Cover image ${label}: original ${kb(input.length)} -> thumbFull ${kb(full.length)}, thumb ${kb(small.length)}`
+      );
+
+      return {
+        thumbFull: reuseFull ? src : `data:image/webp;base64,${full.toString("base64")}`,
+        thumb: `data:image/webp;base64,${small.toString("base64")}`,
+      };
+    } catch (err) {
+      console.warn(`[ImageGenerator] Cover image compression failed for ${label}, using original:`, err);
+      return { thumb: src, thumbFull: src };
+    }
+  }
+
+  /**
    * Generate an authentic, high-quality, topic-matched featured image.
    */
   static async generate(options: GenerateImageOptions): Promise<GeneratedImageResult> {
@@ -283,12 +316,22 @@ export class ImageGenerator {
           const resJson = await response.json();
           const imageUrl = resJson.data?.[0]?.url;
           if (imageUrl) {
+            // DALL-E URLs expire after ~1h, so store the (compressed) image itself instead of the link.
+            let publicUrl = imageUrl;
+            try {
+              const img = await fetch(imageUrl, { signal: AbortSignal.timeout(30000) });
+              if (!img.ok) throw new Error(`HTTP ${img.status}`);
+              const raw = `data:image/png;base64,${Buffer.from(await img.arrayBuffer()).toString("base64")}`;
+              publicUrl = (await this.compressCover(raw, "dall-e")).thumbFull;
+            } catch (dlErr) {
+              console.warn("DALL-E image download failed, storing expiring URL instead:", dlErr);
+            }
             return {
               title: `${options.topic} — Featured Visual`,
               prompt,
               altText,
-              publicUrl: imageUrl,
-              storageKey: `generated/${Date.now()}_dalle.png`,
+              publicUrl,
+              storageKey: `generated/${Date.now()}_dalle.${publicUrl.startsWith("data:image/webp") ? "webp" : "png"}`,
               aspectRatio,
               style,
               visualConcept: concept.visualConcept,

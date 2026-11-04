@@ -4,6 +4,7 @@ import { suite as analyzerSuite } from "./analyzer.test";
 import { suite as exportSuite } from "./export.test";
 import { suite as resilienceSuite } from "./resilience.test";
 import { suite as rateLimiterSuite } from "./rate-limiter.test";
+import { suite as coverImageSuite } from "./cover-image.test";
 import { TestSuite } from "./test-utils";
 
 const allSuites: TestSuite[] = [
@@ -13,6 +14,7 @@ const allSuites: TestSuite[] = [
   exportSuite,
   resilienceSuite,
   rateLimiterSuite,
+  coverImageSuite,
 ];
 
 async function runAllTests() {
