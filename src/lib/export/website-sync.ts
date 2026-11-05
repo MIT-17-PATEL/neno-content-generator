@@ -24,10 +24,12 @@ export class WebsiteSyncService {
       .replace(/\/api\/blogs$/, "")
       .replace(/\/api\/integrations\/content-engine\/blogs$/, "");
 
-    const apiKey =
+    // Trimmed to match the website, which trims both its CONTENT_ENGINE_API_KEY and the incoming header.
+    const apiKey = (
       process.env.CONTENT_ENGINE_API_KEY ||
       process.env.NENO_CONTENT_ENGINE_API_KEY ||
-      "";
+      ""
+    ).trim();
 
     return { websiteBaseUrl, apiKey };
   }
