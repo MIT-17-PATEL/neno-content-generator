@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { TrendingTopicsService } from "@/services/trending-topics-service";
 import { z } from "zod";
+import { requireAuth } from "@/server/auth-guard";
 
 const trendingTopicsSchema = z.object({
   category: z.string().optional(),
@@ -11,6 +12,8 @@ const trendingTopicsSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req); // calls the paid LLM API: logged-in users only
+  if ("error" in auth) return auth.error;
   try {
     const body = await req.json().catch(() => ({}));
     const parsed = trendingTopicsSchema.safeParse(body);
@@ -41,6 +44,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if ("error" in auth) return auth.error;
   try {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category") || undefined;
@@ -61,3 +66,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Failed to fetch trending topics" }, { status: 500 });
   }
 }
+
+// LLM / image / publish work can take minutes; 300s is the Vercel max with Fluid compute (Hobby).
+export const maxDuration = 300;

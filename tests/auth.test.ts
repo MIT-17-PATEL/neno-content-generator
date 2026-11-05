@@ -50,3 +50,24 @@ test("should reject tampered or corrupted JWT tokens", async () => {
   const emptyVerified = await verifySessionToken("invalid.junk.token");
   assertEquals(emptyVerified, null, "Malformed token verification should return null");
 });
+
+test("production refuses a missing, short or public-default AUTH_SECRET (fails closed)", async () => {
+  const { getAuthSecret } = await import("../src/lib/auth-secret");
+  const env = process.env as Record<string, string | undefined>;
+  const prev = { NODE_ENV: env.NODE_ENV, AUTH_SECRET: env.AUTH_SECRET };
+  try {
+    env.NODE_ENV = "production";
+    for (const s of [undefined, "short", "ai-content-studio-default-dev-secret-key-32chars"]) {
+      env.AUTH_SECRET = s;
+      assert(getAuthSecret() === null, `secret ${s ?? "(unset)"} must be rejected in production`);
+    }
+    env.AUTH_SECRET = "a".repeat(40);
+    assert(getAuthSecret() !== null, "a real 32+ char secret is accepted");
+    env.NODE_ENV = "development";
+    env.AUTH_SECRET = undefined;
+    assert(getAuthSecret() !== null, "dev falls back to the dev secret");
+  } finally {
+    env.NODE_ENV = prev.NODE_ENV;
+    env.AUTH_SECRET = prev.AUTH_SECRET;
+  }
+});

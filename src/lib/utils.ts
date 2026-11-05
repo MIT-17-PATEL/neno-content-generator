@@ -5,6 +5,9 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** Valid post slug: lowercase letters/digits separated by single hyphens (what generateSlug produces). */
+export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
 export function generateSlug(title: string): string {
   if (!title) return "";
   return title

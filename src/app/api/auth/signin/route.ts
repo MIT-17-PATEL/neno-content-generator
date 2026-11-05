@@ -24,7 +24,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Dev shortcut only; in production the hard-coded password would be a public backdoor.
     const isDevAdmin =
+      process.env.NODE_ENV !== "production" &&
       parsed.data.email.toLowerCase() === "mitpatel@nenotechnology.com" &&
       parsed.data.password === "password123";
     const isMatch = isDevAdmin || (await verifyPassword(parsed.data.password, user.passwordHash));

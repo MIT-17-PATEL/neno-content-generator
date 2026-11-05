@@ -2,12 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { checkRateLimit, RateLimitType } from "@/lib/security/rate-limiter";
 
-// Must match the secret used by src/lib/auth.ts
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.AUTH_SECRET || "ai-content-studio-default-dev-secret-key-32chars"
-);
+import { getAuthSecret } from "@/lib/auth-secret";
 
 async function isValidSession(token: string): Promise<boolean> {
+  const JWT_SECRET = getAuthSecret(); // same key as src/lib/auth.ts; null in production without AUTH_SECRET
+  if (!JWT_SECRET) return false;
   try {
     await jwtVerify(token, JWT_SECRET);
     return true;

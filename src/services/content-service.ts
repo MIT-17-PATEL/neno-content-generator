@@ -442,6 +442,15 @@ export class ContentService {
     return newItem;
   }
 
+  /** True when another content item (any workspace, including trashed) already uses this slug; the website has one slug namespace. */
+  static async isSlugTaken(slug: string, exceptId: string): Promise<boolean> {
+    if (db.isConfigured) {
+      const res = await db.query("SELECT 1 FROM content_items WHERE slug = $1 AND id <> $2 LIMIT 1", [slug, exceptId]);
+      return res.rows.length > 0;
+    }
+    return Array.from(memoryContent.values()).some((c) => c.slug === slug && c.id !== exceptId);
+  }
+
   static async updateStatus(
     workspaceId: string,
     contentId: string,

@@ -5,13 +5,21 @@ import { VersionService } from "@/services/version-service";
 import { ResearchService } from "@/services/research-service";
 import { WebsiteSyncService } from "@/lib/export/website-sync";
 import { z } from "zod";
+import { SLUG_PATTERN } from "@/lib/utils";
 
 const patchContentSchema = z.object({
   workspaceId: z.string().min(1),
   status: z.enum(["draft", "generating", "in_review", "approved", "exported"]).optional(),
-  title: z.string().min(1).optional(),
-  category: z.string().optional(),
-  excerpt: z.string().optional(),
+  title: z.string().trim().min(5, "Title must be at least 5 characters").max(200).optional(),
+  slug: z
+    .string()
+    .trim()
+    .min(3, "Slug must be at least 3 characters")
+    .max(120)
+    .regex(SLUG_PATTERN, "Slug must be lowercase letters, numbers and single hyphens (e.g. why-we-moved-to-pgvector)")
+    .optional(),
+  category: z.string().trim().min(1).optional(),
+  excerpt: z.string().trim().max(500).optional(),
 });
 
 export async function GET(
@@ -69,19 +77,38 @@ export async function PATCH(
     const wsAuth = await requireWorkspaceAccess(req, parsed.data.workspaceId);
     if ("error" in wsAuth) return wsAuth.error;
 
-    if (parsed.data.status) {
-      const updated = await ContentService.updateStatus(
-        parsed.data.workspaceId,
-        params.id,
-        parsed.data.status
-      );
+    const { workspaceId, status, ...fields } = parsed.data;
+    const changes = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined)) as typeof fields;
+
+    if (changes.slug) {
+      if (!(await ContentService.getById(workspaceId, params.id))) {
+        return NextResponse.json({ error: "Content item not found" }, { status: 404 });
+      }
+      if (await ContentService.isSlugTaken(changes.slug, params.id)) {
+        let n = 2;
+        while (n < 50 && (await ContentService.isSlugTaken(`${changes.slug}-${n}`, params.id))) n++;
+        return NextResponse.json(
+          { error: `Slug "${changes.slug}" is already used by another post.`, suggestion: `${changes.slug}-${n}` },
+          { status: 409 }
+        );
+      }
+    }
+
+    let updated = null;
+    if (status) {
+      updated = await ContentService.updateStatus(workspaceId, params.id, status);
       if (!updated) {
         return NextResponse.json({ error: "Content item not found" }, { status: 404 });
       }
-      return NextResponse.json({ item: updated });
+    }
+    if (Object.keys(changes).length > 0) {
+      updated = await ContentService.updateItem(workspaceId, params.id, changes);
+      if (!updated) {
+        return NextResponse.json({ error: "Content item not found" }, { status: 404 });
+      }
     }
 
-    return NextResponse.json({ success: true });
+    return updated ? NextResponse.json({ item: updated }) : NextResponse.json({ success: true });
   } catch (error) {
     console.error("Patch content error:", error);
     return NextResponse.json(

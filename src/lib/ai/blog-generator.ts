@@ -3,10 +3,11 @@ import { ContentService, generateSlug } from "@/services/content-service";
 import { VersionService } from "@/services/version-service";
 import { ResearchService, GenerationService } from "@/services/research-service";
 import { MediaService } from "@/services/media-service";
-import { ImageGenerator } from "@/lib/ai/image-generator";
 import { ImageStylePreset } from "@/types";
 import { dataStore } from "@/server/data-store";
 import { callAiStructured, isAiConfigured, getActiveAiModel } from "@/lib/ai/ai-client";
+import { WRITING_PROMPT, humanizeArticle, findBannedPhrases } from "@/lib/ai/humanize";
+import { generatePostVisuals, coverMetadata, BlogVisual } from "@/lib/ai/blog-visuals";
 
 export interface BlogGenerationRequest {
   workspaceId: string;
@@ -75,7 +76,6 @@ export async function runBlogGenerationPipeline(
 }> {
   // 1. Fetch active workspace brand settings
   const brand = await dataStore.getBrandSettings(params.workspaceId);
-  const brandName = brand?.brand_name || "Enterprise";
   const preferredTerms = brand?.preferred_terms || [];
   const prohibitedTerms = brand?.prohibited_terms || [];
   const styleGuidelines = brand?.style_guidelines || "";
@@ -85,6 +85,7 @@ export async function runBlogGenerationPipeline(
     params.desiredLength === "short" ? 850 : params.desiredLength === "long" ? 2200 : 1400;
 
   // 3. Initiate Generation Run Record
+  const startedAt = Date.now();
   const initialRun = await GenerationService.startRun({
     runType: "blog_full",
     model: isAiConfigured() ? getActiveAiModel() : "studio-neural-v1",
@@ -99,20 +100,14 @@ export async function runBlogGenerationPipeline(
       try {
         // Live Gemini / OpenAI Structured API Call via Universal AI Client with 14 Human Editorial Rules
         rawOutput = await callAiStructured({
-          systemPrompt: `You are an elite, highly experienced principal systems engineer and lead technical writer for ${brandName}.
-You produce insightful, production-grade technical articles for ${params.audience || "Engineering Leaders, Principal Architects, and CTOs"}.
+          systemPrompt: `${WRITING_PROMPT}
 
-CRITICAL HUMAN-WRITING EDITORIAL PRINCIPLES:
-1. NO GENERIC AI INTRODUCTIONS: Never start with "In today's rapidly evolving world", "In the modern digital landscape", "At its core", or "Let's dive into". Start directly with an operational observation, historical bottleneck, or architecture reality.
-2. NATURAL HUMAN PACING: Mix short, punchy declarative statements with detailed technical breakdowns. Avoid paragraphs where all sentences have identical lengths.
-3. CONCRETE OVER ABSTRACT: Provide real-world architecture trade-offs, quantifiable benchmarks, latency variances, memory footprints, and practical caveats.
-4. NO DECORATIVE SYMBOLS OR EXCESSIVE EM DASHES: Do not use repeated "—" dashes. Use normal commas, periods, parentheses, and colons naturally.
-5. NO FORMULAIC SECTIONS: Do not use predictable "Problem -> Solution -> Benefits -> Conclusion" headers. Create topic-tailored, engineering-grounded section names (e.g., "Where the Overhead Originates", "State Synchronization Tradeoffs", "Production Failure Modes").
-6. ZERO MARKETING FLUFF: Avoid adjectives like "unprecedented", "game-changing", "revolutionary", "seamlessly".
-7. CLEAN MARKDOWN ONLY: Return clean Markdown for the article body with ## and ### headings, code blocks (\`\`\`typescript / \`\`\`yaml), tables, and concrete bullet points. NEVER include markdown image syntax (![...](...)) or raw data URIs inside the article markdown; the featured visual is handled separately.
+FORMAT
+Readers: ${params.audience || "engineering leaders and senior engineers"}.
+Return the article body as Markdown with ## and ### headings; code blocks and tables only where they help. Never include markdown image syntax or data URIs in the article; visuals are handled separately.
 
 Brand Tone: ${params.tone}
-Target Word Count: ~${targetWords} words.
+${params.desiredLength === "medium" ? "" : `Length: about ${targetWords} words.`}
 Preferred Terminology: ${preferredTerms.join(", ") || "None"}
 Prohibited Terminology: ${prohibitedTerms.join(", ") || "None"}
 
@@ -141,14 +136,14 @@ You must return valid JSON matching this schema:
   },
   "featuredImage": {
     "brief": "Visual description",
-    "prompt": "Detailed diffusion prompt for sleek 16:9 architectural visual",
+    "prompt": "One concrete real-world photo scene specific to this post (people, place, objects)",
     "altText": "Accessible alt description"
   },
   "sources": [
     { "url": "https://example.com/source", "title": "Empirical Research Citation", "publisher": "ACM / IEEE / USENIX", "notes": "Benchmark findings" }
   ]
 }`,
-          userPrompt: `Write a deep-dive technical article on: "${params.topic}". Category: ${params.category}. Audience: ${params.audience}. Ensure the writing is authoritative, nuanced, and reads like a seasoned staff engineer wrote and edited it.`,
+          userPrompt: `Write a blog post on: "${params.topic}". Category: ${params.category}. Audience: ${params.audience}.`,
         });
       } catch (aiErr) {
         console.warn("Live AI generation encountered error, utilizing resilient studio engine:", aiErr);
@@ -367,71 +362,48 @@ This architecture delivers clear returns for teams with independent deployment v
     if (!rawObj.buttonText) rawObj.buttonText = "Read article";
     if (!rawObj.buttonLink) rawObj.buttonLink = `/blog-single/${rawObj.slug || generateSlug(params.topic)}`;
 
-    // 5. Run Human Editorial Cleanup Pass on the article markdown
+    // 5. Cleanup, LLM edit pass, banned-phrase check (+ one more edit pass if any remain)
+    let bannedPhrases: string[] = [];
     if (typeof rawObj.article === "string") {
-      rawObj.article = polishArticleToHumanEditorial(
-        rawObj.article,
-        typeof rawObj.title === "string" ? rawObj.title : params.topic,
-        params.audience
-      );
+      const titleText = typeof rawObj.title === "string" ? rawObj.title : params.topic;
+      const polished = polishArticleToHumanEditorial(rawObj.article, titleText, params.audience);
+      const edited = isAiConfigured() ? (await humanizeArticle(polished)).article : polished;
+      rawObj.article = polishArticleToHumanEditorial(edited, titleText, params.audience);
+      bannedPhrases = findBannedPhrases(rawObj.article as string);
     }
 
     // Validate output with Zod schema
     const validatedOutput = blogGenerationOutputSchema.parse(rawObj);
 
-    // 6. Auto-Generate Featured Hero Image (Saved as proper asset URL)
-    let generatedImageUrl = "";
-    let finalImagePrompt = validatedOutput.featuredImage.prompt;
-    let finalImageAlt = validatedOutput.featuredImage.altText;
-
-    if (params.autoGenerateImage !== false) {
+    // 6. Topic-based visuals: planned cover (diagram/photo) + up to 2 inline visuals for the review step
+    let cover: BlogVisual | null = null;
+    let inlineVisuals: BlogVisual[] = [];
+    let visualWarnings: string[] = [];
+    let visualPlan: unknown;
+    // Visuals take up to ~2 min; on a 300s serverless limit, skip them when the text already took long so the
+    // draft is still saved. The cover can then be made from Review & Publish (its own request).
+    const VISUALS_BUDGET_MS = 150_000;
+    const tooLate = Date.now() - startedAt > VISUALS_BUDGET_MS;
+    if (tooLate && params.autoGenerateImage !== false) {
+      visualWarnings = ["Visuals were skipped because writing took long. Generate a cover in Review & Publish."];
+    }
+    if (params.autoGenerateImage !== false && !tooLate) {
       try {
-        const imageResult = await ImageGenerator.generate({
-          topic: validatedOutput.title || params.topic,
-          summary: validatedOutput.shortDescription || validatedOutput.excerpt,
-          category: validatedOutput.category || params.category,
-          keyConcepts: validatedOutput.seo?.keywords || [],
-          industry: "Enterprise AI & Architecture",
-          articleType: "blog",
-          style: params.imageStyle || "dark_tech",
-          aspectRatio: "16:9",
-          customPrompt: params.customImagePrompt || validatedOutput.featuredImage?.prompt,
-          brandName,
+        const v = await generatePostVisuals({
+          title: validatedOutput.title,
+          article: validatedOutput.article,
+          workspaceId: params.workspaceId,
+          scene: params.customImagePrompt,
         });
-
-        if (imageResult?.publicUrl) {
-          generatedImageUrl = imageResult.publicUrl;
-          finalImagePrompt = imageResult.prompt || finalImagePrompt;
-          finalImageAlt = imageResult.altText || finalImageAlt;
-
-          // Store in Media Assets database
-          await MediaService.create({
-            workspaceId: params.workspaceId,
-            type: "featured_image",
-            title: `${validatedOutput.title} — Featured Hero`,
-            prompt: finalImagePrompt,
-            altText: finalImageAlt,
-            aspectRatio: "16:9",
-            style: params.imageStyle || "dark_tech",
-            storageKey: imageResult.storageKey || `generated/${Date.now()}.png`,
-            publicUrl: generatedImageUrl,
-            fileSize: 45200,
-            mimeType: generatedImageUrl.endsWith(".svg") ? "image/svg+xml" : "image/png",
-          });
-        }
+        ({ cover, warnings: visualWarnings, plan: visualPlan } = v);
+        inlineVisuals = v.inline;
       } catch (imgErr) {
-        console.warn("Auto image generation during blog pipeline:", imgErr);
+        console.warn("Visual generation during blog pipeline:", imgErr);
+        visualWarnings = ["Visual generation failed. Regenerate or upload a cover in the review step."];
       }
     }
-
-    // Attach generated image URL to metadata (DO NOT inject raw markdown image into article body!)
-    if (generatedImageUrl) {
-      validatedOutput.featuredImage = {
-        brief: generatedImageUrl,
-        prompt: finalImagePrompt,
-        altText: finalImageAlt,
-        url: generatedImageUrl,
-      };
+    if (cover) {
+      validatedOutput.featuredImage = { brief: cover.dataUri, prompt: cover.caption || cover.alt, altText: cover.alt, url: cover.dataUri };
     }
 
     // 7. Create Content Item in Database
@@ -444,6 +416,25 @@ This architecture delivers clear returns for teams with independent deployment v
       createdBy: params.userId,
     });
 
+    // Media records: the cover one is what the "never reuse a cover" check compares against.
+    for (const v of [cover, ...inlineVisuals]) {
+      if (!v) continue;
+      await MediaService.create({
+        workspaceId: params.workspaceId,
+        contentId: contentItem.id,
+        type: v === cover ? "featured_image" : "inline_diagram",
+        title: `${validatedOutput.title} — ${v === cover ? "Cover" : v.caption || "Inline visual"}`,
+        prompt: v.mermaid || v.caption || v.alt,
+        altText: v.alt,
+        aspectRatio: "16:9",
+        style: v.kind === "photo" ? "editorial_photo" : "dark_tech",
+        storageKey: `generated/${contentItem.id}_${v.hash.slice(0, 12)}.webp`,
+        publicUrl: v.dataUri,
+        fileSize: Math.round((v.dataUri.length * 3) / 4),
+        mimeType: "image/webp",
+      }).catch((err) => console.warn("Saving visual media record failed:", err));
+    }
+
     // 8. Create Initial Version Snapshot with SEO metadata & Featured Image
     await VersionService.createVersion({
       contentId: contentItem.id,
@@ -453,13 +444,16 @@ This architecture delivers clear returns for teams with independent deployment v
         metaDescription: validatedOutput.seo.metaDescription,
         keywords: validatedOutput.seo.keywords,
         slug: validatedOutput.seo.slug,
-        featuredImagePrompt: finalImagePrompt,
-        featuredImageBrief: generatedImageUrl || validatedOutput.featuredImage.brief,
-        coverImage: generatedImageUrl || undefined,
-        ogImage: generatedImageUrl || undefined,
-        featuredImageUrl: generatedImageUrl || undefined,
+        featuredImagePrompt: validatedOutput.featuredImage.prompt,
+        featuredImageBrief: validatedOutput.featuredImage.brief,
+        ...(cover ? coverMetadata(cover) : {}),
         author: validatedOutput.author || "Mit Patel",
         tags: [validatedOutput.category || params.category],
+        // Review-step data: inline visuals are shown for review only (the website renderer has no image blocks yet).
+        inlineVisuals: inlineVisuals.map(({ kind, dataUri, alt, caption, afterHeading, inlineType, mermaid }) => ({ kind, dataUri, alt, caption, afterHeading, inlineType, mermaid })),
+        bannedPhrases,
+        visualWarnings,
+        visualPlan,
       },
       generationRunId: initialRun.id,
       createdBy: params.userId,

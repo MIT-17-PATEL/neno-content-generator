@@ -33,3 +33,6 @@ export async function POST(
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
+
+// LLM / image / publish work can take minutes; 300s is the Vercel max with Fluid compute (Hobby).
+export const maxDuration = 300;

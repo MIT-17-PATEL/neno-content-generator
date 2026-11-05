@@ -78,6 +78,14 @@ export interface ContentVersion {
     canonicalUrl?: string;
     author?: string;
     tags?: string[];
+    // Review-step data written by the blog pipeline / visuals route
+    coverType?: "diagram" | "comparison" | "photo" | "upload" | "stock";
+    coverAlt?: string;
+    coverCredit?: { provider: string; photographer: string; photographerUrl: string; photoUrl: string; text: string };
+    coverStock?: { provider: string; id: string };
+    inlineVisuals?: Array<{ kind: string; dataUri: string; alt: string; caption?: string; afterHeading?: string; inlineType?: string }>;
+    bannedPhrases?: string[];
+    visualWarnings?: string[];
   };
   generationRunId?: string;
   createdBy: string;

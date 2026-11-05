@@ -4,6 +4,10 @@ import { hashPassword, createSessionToken } from "@/lib/auth";
 import { dataStore } from "@/server/data-store";
 
 export async function POST(req: NextRequest) {
+  // A public deployment must not let anyone create an account; enable deliberately with ALLOW_SIGNUP=true.
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_SIGNUP !== "true") {
+    return NextResponse.json({ error: "Sign-up is disabled. Ask an administrator for access." }, { status: 403 });
+  }
   try {
     const body = await req.json();
     const parsed = signUpSchema.safeParse(body);

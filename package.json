@@ -14,12 +14,16 @@
     "sync:blogs": "node scripts/sync-blogs.mjs"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.1.0",
+    "@fontsource/plus-jakarta-sans": "^5.1.0",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "jose": "^6.2.12",
     "lucide-react": "^1.51.0",
+    "mermaid": "^11.17.2",
     "next": "14.2",
     "pg": "^8.23.1",
+    "puppeteer": "^23.11.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "sharp": "^0.35.5",

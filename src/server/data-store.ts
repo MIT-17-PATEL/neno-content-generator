@@ -12,7 +12,20 @@ interface StoredUser extends DbUser {
   passwordHash: string;
 }
 
-// In-memory persistent database store (with isolation and schema contracts)
+const IS_PROD = process.env.NODE_ENV === "production";
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "mitpatel@nenotechnology.com").trim().toLowerCase();
+const DEV_ADMIN_PASSWORD = "password123";
+
+/** Production admin password comes only from ADMIN_PASSWORD (12+ chars); the dev default is public in the repo. */
+function adminPasswordHash(): string {
+  const pw = process.env.ADMIN_PASSWORD;
+  if (pw && pw.length >= 12) return bcrypt.hashSync(pw, 10);
+  if (!IS_PROD) return bcrypt.hashSync(DEV_ADMIN_PASSWORD, 10);
+  console.error("[auth] ADMIN_PASSWORD (12+ characters) is not set: the admin account cannot sign in.");
+  return bcrypt.hashSync(crypto.randomBytes(32).toString("hex"), 10); // unguessable, i.e. login disabled
+}
+
+// In-memory store (users, workspaces, brand settings are NOT persisted to Postgres; they reset on restart)
 class MemoryDataStore {
   private users: Map<string, StoredUser> = new Map();
   private workspaces: Map<string, DbWorkspace> = new Map();
@@ -24,9 +37,9 @@ class MemoryDataStore {
     const defaultUserId = "usr_default_mit";
     this.users.set(defaultUserId, {
       id: defaultUserId,
-      email: "mitpatel@nenotechnology.com",
-      name: "Mit Patel",
-      passwordHash: bcrypt.hashSync("password123", 10),
+      email: ADMIN_EMAIL,
+      name: process.env.ADMIN_NAME || "Mit Patel",
+      passwordHash: adminPasswordHash(),
       created_at: new Date(),
       updated_at: new Date(),
     });
@@ -67,11 +80,14 @@ class MemoryDataStore {
     const allUsers = Array.from(this.users.values());
     for (const user of allUsers) {
       if (user.email.toLowerCase() === email.toLowerCase()) {
+        // Dev convenience only: keep the local admin on the known dev password.
         if (
-          user.email.toLowerCase() === "mitpatel@nenotechnology.com" &&
-          !bcrypt.compareSync("password123", user.passwordHash)
+          !IS_PROD &&
+          !process.env.ADMIN_PASSWORD &&
+          user.email.toLowerCase() === ADMIN_EMAIL &&
+          !bcrypt.compareSync(DEV_ADMIN_PASSWORD, user.passwordHash)
         ) {
-          user.passwordHash = bcrypt.hashSync("password123", 10);
+          user.passwordHash = bcrypt.hashSync(DEV_ADMIN_PASSWORD, 10);
         }
         return user;
       }

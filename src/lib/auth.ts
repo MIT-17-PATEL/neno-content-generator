@@ -1,9 +1,7 @@
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.AUTH_SECRET || "ai-content-studio-default-dev-secret-key-32chars"
-);
+import { getAuthSecret } from "@/lib/auth-secret";
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = await bcrypt.genSalt(10);
@@ -21,6 +19,8 @@ export interface TokenPayload {
 }
 
 export async function createSessionToken(payload: TokenPayload): Promise<string> {
+  const JWT_SECRET = getAuthSecret();
+  if (!JWT_SECRET) throw new Error("AUTH_SECRET (32+ characters) must be set in production.");
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -29,6 +29,8 @@ export async function createSessionToken(payload: TokenPayload): Promise<string>
 }
 
 export async function verifySessionToken(token: string): Promise<TokenPayload | null> {
+  const JWT_SECRET = getAuthSecret();
+  if (!JWT_SECRET) return null;
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);
     return {

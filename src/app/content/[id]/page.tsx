@@ -25,7 +25,15 @@ import {
   Bot,
   Loader2,
   Trash2,
+  Upload,
+  Network,
+  Camera,
+  AlertTriangle,
+  X,
+  Search,
 } from "lucide-react";
+import { findBannedPhrases } from "@/lib/ai/banned-phrases";
+import { generateSlug, SLUG_PATTERN } from "@/lib/utils";
 import { useAuth } from "@/features/auth/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -199,7 +207,10 @@ export default function ContentDetailPage() {
 
         if (res.ok) {
           const data = await res.json();
-          setCurrentVersion(data.version);
+          // data.version is the raw DB row (seo_metadata); keep the mapped seoMetadata so the next save doesn't drop the cover.
+          setCurrentVersion((prev) =>
+            prev ? { ...prev, id: data.version.id, versionNumber: data.version.version_number, content: data.version.content } : prev
+          );
           setVersions((prev) => [data.version, ...prev]);
           setIsDirty(false);
           setHasUserEdits(true);
@@ -243,6 +254,167 @@ export default function ContentDetailPage() {
     }
   };
 
+  // ---------------- Review before publish
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [reviewBusy, setReviewBusy] = useState<string | null>(null);
+  const [reviewError, setReviewError] = useState("");
+
+  /** Reloads the latest version without the full-page loading state (keeps the review overlay open). */
+  const reloadVersion = async (): Promise<ContentVersion | null> => {
+    if (!activeWorkspace) return null;
+    const res = await fetch(`/api/content/${contentId}?workspaceId=${activeWorkspace.id}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    setCurrentVersion(data.currentVersion);
+    setVersions(data.versions || []);
+    if (data.currentVersion) setEditorContent(data.currentVersion.content);
+    return data.currentVersion;
+  };
+
+  const runVisualAction = async (label: string, body: Record<string, unknown>): Promise<boolean> => {
+    if (!activeWorkspace) return false;
+    let ok = false;
+    setReviewBusy(label);
+    setReviewError("");
+    try {
+      if (isDirty) await handleManualSave(); // visuals are built from the saved draft
+      const res = await fetch(`/api/content/${contentId}/visuals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId: activeWorkspace.id, ...body }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) setReviewError(data.error || `Request failed (HTTP ${res.status})`);
+      ok = res.ok;
+      await reloadVersion();
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setReviewBusy(null);
+    }
+    return ok;
+  };
+
+  // Stock photo search (Pexels / Unsplash via the visuals route). Results are previews only until one is picked.
+  type StockResult = {
+    provider: "pexels" | "unsplash"; id: string; thumbUrl: string; photographer: string; alt: string; score?: number; reason?: string;
+    credit: { photographerUrl: string; photoUrl: string }; // links already carry Unsplash referral params
+  };
+  const [stockOpen, setStockOpen] = useState(false);
+  const [stockQuery, setStockQuery] = useState("");
+  const [stockQueries, setStockQueries] = useState<string[]>([]);
+  const [stockResults, setStockResults] = useState<StockResult[] | null>(null);
+  const [stockWarnings, setStockWarnings] = useState<string[]>([]);
+
+  const searchStock = async (query?: string) => {
+    if (!activeWorkspace) return;
+    setReviewBusy("stock");
+    setReviewError("");
+    try {
+      if (isDirty) await handleManualSave(); // queries are built from the saved draft
+      const res = await fetch(`/api/content/${contentId}/visuals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId: activeWorkspace.id, action: "stock-search", ...(query?.trim() ? { query: query.trim() } : {}) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setReviewError(data.error || `Stock search failed (HTTP ${res.status})`);
+        setStockResults([]);
+        return;
+      }
+      setStockResults(data.candidates || []);
+      setStockQueries(data.queries || []);
+      setStockWarnings(data.warnings || []);
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setReviewBusy(null);
+    }
+  };
+
+  const handleCoverUpload = (file: File | undefined) => {
+    if (!file) return;
+    if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) return setReviewError("Use a PNG, JPEG, WebP or GIF image.");
+    if (file.size > 10 * 1024 * 1024) return setReviewError("Image must be under 10 MB.");
+    const reader = new FileReader();
+    reader.onload = () =>
+      runVisualAction("upload", { action: "upload-cover", dataUri: String(reader.result), alt: file.name.replace(/\.[^.]+$/, "") });
+    reader.readAsDataURL(file);
+  };
+
+  // Editable title / slug / excerpt in the review step
+  const [reviewTitle, setReviewTitle] = useState("");
+  const [reviewSlug, setReviewSlug] = useState("");
+  const [reviewExcerpt, setReviewExcerpt] = useState("");
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [slugSuggestion, setSlugSuggestion] = useState("");
+  const isPublishedItem = item?.status === "approved" || item?.status === "exported";
+
+  const openReview = () => {
+    setReviewError("");
+    setSlugSuggestion("");
+    setReviewTitle(item?.title || "");
+    setReviewSlug(item?.slug || "");
+    setReviewExcerpt(item?.excerpt || "");
+    setSlugTouched(false);
+    setIsReviewOpen(true);
+  };
+
+  const handleReviewTitleChange = (title: string) => {
+    setReviewTitle(title);
+    // Only auto-follow the title for unpublished posts the user hasn't hand-edited, so live URLs don't change silently.
+    if (!slugTouched && !isPublishedItem) setReviewSlug(generateSlug(title));
+  };
+
+  /** Saves title/slug/excerpt if changed. Returns false (and shows why) when the server rejects them. */
+  const saveReviewMeta = async (): Promise<boolean> => {
+    if (!activeWorkspace || !item) return false;
+    const changes: Record<string, string> = {};
+    if (reviewTitle.trim() !== item.title) changes.title = reviewTitle.trim();
+    if (reviewSlug.trim() !== item.slug) changes.slug = reviewSlug.trim();
+    if (reviewExcerpt.trim() !== (item.excerpt || "")) changes.excerpt = reviewExcerpt.trim();
+    if (Object.keys(changes).length === 0) return true;
+    const res = await fetch(`/api/content/${contentId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspaceId: activeWorkspace.id, ...changes }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const fieldErrors = data.details?.fieldErrors ? Object.values(data.details.fieldErrors).flat().join(" ") : "";
+      setReviewError(fieldErrors || data.error || `Could not save title/slug/excerpt (HTTP ${res.status})`);
+      setSlugSuggestion(data.suggestion || "");
+      return false;
+    }
+    if (data.item) setItem(data.item);
+    return true;
+  };
+
+  const handleSaveFromReview = async () => {
+    setReviewBusy("save");
+    setReviewError("");
+    try {
+      if (!(await saveReviewMeta())) return;
+      if (isDirty) await handleManualSave();
+    } finally {
+      setReviewBusy(null);
+    }
+  };
+
+  const handlePublishFromReview = async () => {
+    setReviewBusy("publish");
+    setReviewError("");
+    try {
+      if (!(await saveReviewMeta())) return;
+      if (isDirty) await handleManualSave();
+      setIsReviewOpen(false);
+      await handlePublishToWebsite();
+    } finally {
+      setReviewBusy(null);
+    }
+  };
+
   const handleManualSave = async () => {
     if (!activeWorkspace || !item || !editorContent.trim()) return;
     setIsAutosaving(true);
@@ -259,12 +431,11 @@ export default function ContentDetailPage() {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        setCurrentVersion(data.version);
-        setVersions([data.version, ...versions]);
+        // The versions API returns the raw DB row (seo_metadata); reload the mapped version so the cover isn't dropped on the next save.
+        const saved = await reloadVersion();
         setIsDirty(false);
         setLastSavedTime(new Date().toLocaleTimeString());
-        setStatusMessage(`Version ${data.version.versionNumber} saved successfully`);
+        setStatusMessage(`Version ${saved?.versionNumber ?? ""} saved successfully`);
         setTimeout(() => setStatusMessage(""), 3000);
       }
     } catch (err) {
@@ -618,7 +789,7 @@ export default function ContentDetailPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={handlePublishToWebsite}
+            onClick={openReview}
             disabled={isPublishingToWebsite}
             className="gap-1.5 text-xs h-8 font-semibold border-orange-300 text-orange-700 bg-orange-50/50 hover:bg-orange-100/80 transition-colors"
           >
@@ -630,7 +801,7 @@ export default function ContentDetailPage() {
             ) : (
               <>
                 <Sparkles className="h-3.5 w-3.5 text-orange-600" />
-                <span>Publish to Website</span>
+                <span>Review &amp; Publish</span>
               </>
             )}
           </Button>
@@ -1022,6 +1193,225 @@ export default function ContentDetailPage() {
       </div>
 
       {/* AI Section Revision Dialog */}
+      {/* Review before publish: nothing is sent to the website until "Publish" is clicked here. */}
+      {isReviewOpen && (() => {
+        const meta = currentVersion?.seoMetadata || {};
+        const coverSrc = meta.featuredImageUrl || meta.coverImage || meta.ogImage || "";
+        const coverType = meta.coverType;
+        const inline = meta.inlineVisuals || [];
+        const banned = findBannedPhrases(editorContent);
+        const busy = reviewBusy !== null;
+        const reviewValid = reviewTitle.trim().length >= 5 && reviewSlug.length >= 3 && SLUG_PATTERN.test(reviewSlug);
+        const spin = (k: string) => reviewBusy === k && <Loader2 className="h-3.5 w-3.5 animate-spin" />;
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm overflow-y-auto" role="dialog" aria-modal="true" aria-label="Review before publish">
+            <div className="max-w-6xl mx-auto my-6 bg-white rounded-xl shadow-xl border border-slate-200">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900">Review before publish</h2>
+                  <p className="text-[11px] text-slate-500">Check the draft and visuals. Nothing is published until you click Publish.</p>
+                </div>
+                <button type="button" onClick={() => setIsReviewOpen(false)} disabled={busy} className="text-slate-500 hover:text-slate-800" aria-label="Close review">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {reviewError && (
+                <div className="mx-5 mt-4 p-2.5 rounded bg-red-50 text-red-700 border border-red-200 text-xs">{reviewError}</div>
+              )}
+
+              <div className="grid lg:grid-cols-[1fr_360px] gap-5 p-5">
+                {/* Left: metadata + editable draft */}
+                <div className="space-y-3 min-w-0">
+                  <div className="space-y-2.5">
+                    <div>
+                      <label htmlFor="review-title" className="block text-xs font-semibold text-slate-700 mb-1">Title</label>
+                      <Input id="review-title" value={reviewTitle} onChange={(e) => handleReviewTitleChange(e.target.value)} />
+                      {reviewTitle.trim().length < 5 && <p className="text-[11px] text-red-600 mt-1">Title must be at least 5 characters.</p>}
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label htmlFor="review-slug" className="text-xs font-semibold text-slate-700">Slug</label>
+                        <button type="button" className="text-[11px] text-orange-700 hover:underline"
+                          onClick={() => { setReviewSlug(generateSlug(reviewTitle)); setSlugTouched(true); setSlugSuggestion(""); }}>
+                          Suggest from title
+                        </button>
+                      </div>
+                      <Input id="review-slug" className="font-mono" value={reviewSlug} spellCheck={false}
+                        onChange={(e) => { setReviewSlug(e.target.value.toLowerCase()); setSlugTouched(true); setSlugSuggestion(""); }} />
+                      {reviewSlug && !SLUG_PATTERN.test(reviewSlug) && (
+                        <p className="text-[11px] text-red-600 mt-1">Use lowercase letters, numbers and single hyphens only.</p>
+                      )}
+                      {slugSuggestion && (
+                        <button type="button" className="text-[11px] text-orange-700 hover:underline mt-1"
+                          onClick={() => { setReviewSlug(slugSuggestion); setSlugSuggestion(""); setReviewError(""); }}>
+                          Use “{slugSuggestion}” instead
+                        </button>
+                      )}
+                      {isPublishedItem && reviewSlug !== item?.slug && (
+                        <p className="text-[11px] text-amber-700 mt-1">
+                          This post is already live at /blog-single/{item?.slug}. Publishing with a new slug creates a new URL; the old one stays up until you remove it.
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label htmlFor="review-excerpt" className="block text-xs font-semibold text-slate-700 mb-1">Excerpt</label>
+                      <Textarea id="review-excerpt" rows={3} maxLength={500} value={reviewExcerpt} onChange={(e) => setReviewExcerpt(e.target.value)} />
+                      <p className="text-[10px] text-slate-400 mt-0.5 text-right">{reviewExcerpt.length}/500</p>
+                    </div>
+                  </div>
+
+                  {banned.length > 0 ? (
+                    <div className="p-2.5 rounded bg-amber-50 border border-amber-200 text-xs text-amber-800 flex gap-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      <span><strong>Banned phrases still in the draft:</strong> {banned.join(", ")}</span>
+                    </div>
+                  ) : (
+                    <div className="p-2 rounded bg-emerald-50 border border-emerald-200 text-xs text-emerald-800">No banned phrases found.</div>
+                  )}
+
+                  <label htmlFor="review-draft" className="block text-xs font-semibold text-slate-700">Draft (Markdown, editable)</label>
+                  <textarea
+                    id="review-draft"
+                    rows={26}
+                    value={editorContent}
+                    onChange={(e) => handleEditorChange(e.target.value)}
+                    className="w-full border border-slate-200 rounded-md p-3 font-mono text-xs text-slate-900 leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-orange-200"
+                  />
+                </div>
+
+                {/* Right: cover + inline visuals */}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                      Cover {coverType && <span className="font-normal normal-case text-slate-500">({coverType})</span>}
+                    </h3>
+                    <div className="rounded-md overflow-hidden border border-slate-200 bg-slate-100 aspect-video flex items-center justify-center">
+                      {coverSrc ? (
+                        <img src={coverSrc} alt={meta.coverAlt || "Cover image"} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xs text-slate-500 p-4 text-center">No cover yet. Generate one or upload your own.</span>
+                      )}
+                    </div>
+                    {meta.coverCredit && (
+                      <p className="text-[11px] text-slate-600">
+                        Photo by <a href={meta.coverCredit.photographerUrl} target="_blank" rel="noopener noreferrer" className="underline">{meta.coverCredit.photographer}</a>
+                        {" "}on{" "}
+                        <a href={meta.coverCredit.photoUrl} target="_blank" rel="noopener noreferrer" className="underline">
+                          {meta.coverCredit.provider === "pexels" ? "Pexels" : "Unsplash"}
+                        </a>
+                        <span className="text-slate-400"> (sent to the website as the cover credit)</span>
+                      </p>
+                    )}
+                    {meta.coverAlt && <p className="text-[11px] text-slate-500">Alt: {meta.coverAlt}</p>}
+                    <div className="flex flex-wrap gap-1.5">
+                      <Button variant="outline" size="sm" disabled={busy} className="gap-1 text-xs h-8"
+                        onClick={() => runVisualAction("regen", { action: "regenerate-cover", type: coverType === "photo" ? "photo" : "diagram" })}>
+                        {spin("regen") || <RefreshCw className="h-3.5 w-3.5" />} Regenerate
+                      </Button>
+                      <Button variant="outline" size="sm" disabled={busy} className="gap-1 text-xs h-8"
+                        onClick={() => runVisualAction("switch", { action: "regenerate-cover", type: coverType === "photo" ? "diagram" : "photo" })}>
+                        {spin("switch") || (coverType === "photo" ? <Network className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />)}
+                        {coverType === "photo" ? "Use diagram" : "Use photo"}
+                      </Button>
+                      <label className={`inline-flex items-center gap-1 text-xs h-8 px-3 rounded-md border border-slate-200 ${busy ? "opacity-50 pointer-events-none" : "cursor-pointer hover:bg-slate-50"}`}>
+                        {spin("upload") || <Upload className="h-3.5 w-3.5" />} Upload my image
+                        <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="sr-only"
+                          onChange={(e) => { handleCoverUpload(e.target.files?.[0]); e.target.value = ""; }} />
+                      </label>
+                      <Button variant="outline" size="sm" disabled={busy} className="gap-1 text-xs h-8"
+                        onClick={() => { setStockOpen(true); if (!stockResults) searchStock(); }}>
+                        {spin("stock") || <Search className="h-3.5 w-3.5" />} Find stock photo
+                      </Button>
+                    </div>
+
+                    {stockOpen && (
+                      <div className="border border-slate-200 rounded-md p-2.5 space-y-2 bg-slate-50">
+                        <form className="flex gap-1.5" onSubmit={(e) => { e.preventDefault(); searchStock(stockQuery); }}>
+                          <Input aria-label="Stock photo search" className="h-8 text-xs" value={stockQuery}
+                            placeholder={stockQueries.join(" · ") || "e.g. engineers at whiteboard"} onChange={(e) => setStockQuery(e.target.value)} />
+                          <Button type="submit" variant="outline" size="sm" disabled={busy} className="text-xs h-8 shrink-0">Search again</Button>
+                        </form>
+                        {stockQueries.length > 0 && <p className="text-[10px] text-slate-500">Searched: {stockQueries.join(" · ")}</p>}
+                        {(stockWarnings || []).map((w, i) => <p key={i} className="text-[10px] text-amber-700">{w}</p>)}
+                        {reviewBusy === "stock" && <p className="text-[11px] text-slate-500">Searching and scoring photos…</p>}
+                        {stockResults && stockResults.length === 0 && reviewBusy !== "stock" && (
+                          <p className="text-[11px] text-slate-500">No suitable photos found. Try a more concrete scene.</p>
+                        )}
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {(stockResults || []).map((c) => (
+                            <div key={`${c.provider}:${c.id}`} className="space-y-0.5">
+                              <button type="button" disabled={busy}
+                                onClick={() => runVisualAction("pick", { action: "stock-select", provider: c.provider, id: c.id }).then((ok) => ok && setStockOpen(false))}
+                                className="block w-full aspect-video rounded overflow-hidden border border-slate-200 hover:ring-2 hover:ring-orange-400 disabled:opacity-50"
+                                title={c.reason || c.alt}>
+                                <img src={c.thumbUrl} alt={c.alt || `Photo by ${c.photographer}`} className="w-full h-full object-cover" loading="lazy" />
+                              </button>
+                              <p className="text-[9px] text-slate-500 leading-tight">
+                                {typeof c.score === "number" && <span className="font-semibold text-slate-700">{c.score}/10 · </span>}
+                                Photo by <a href={c.credit.photographerUrl} target="_blank" rel="noopener noreferrer" className="underline">{c.photographer}</a>
+                                {" "}on{" "}
+                                <a href={c.credit.photoUrl} target="_blank" rel="noopener noreferrer" className="underline">
+                                  {c.provider === "pexels" ? "Pexels" : "Unsplash"}
+                                </a>
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                        {reviewBusy === "pick" && <p className="text-[11px] text-slate-500">Saving cover…</p>}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Inline visuals</h3>
+                    <p className="text-[11px] text-slate-500">For review only. The website can&apos;t show images inside the post body yet, so these are not published.</p>
+                    {[0, 1].map((i) => {
+                      const v = inline[i];
+                      if (!v && i > inline.length) return null;
+                      return (
+                        <div key={i} className="border border-slate-200 rounded-md p-2 space-y-1.5">
+                          {v ? (
+                            <>
+                              <img src={v.dataUri} alt={v.alt} className="w-full rounded" />
+                              <p className="text-[11px] text-slate-700">{v.caption}</p>
+                              <p className="text-[10px] text-slate-400">After: “{v.afterHeading}” · {v.inlineType}</p>
+                            </>
+                          ) : (
+                            <p className="text-[11px] text-slate-500">No inline visual planned.</p>
+                          )}
+                          <Button variant="outline" size="sm" disabled={busy} className="gap-1 text-xs h-7"
+                            onClick={() => runVisualAction(`inline-${i}`, { action: "regenerate-inline", index: i })}>
+                            {spin(`inline-${i}`) || <RefreshCw className="h-3 w-3" />} {v ? "Regenerate" : "Try to generate"}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {(meta.visualWarnings || []).length > 0 && (
+                    <div className="p-2 rounded bg-slate-50 border border-slate-200 text-[11px] text-slate-600 space-y-0.5">
+                      {(meta.visualWarnings || []).map((w, i) => <div key={i}>• {w}</div>)}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200">
+                <Button variant="outline" size="sm" disabled={busy} onClick={() => setIsReviewOpen(false)} className="text-xs h-8">Cancel</Button>
+                <Button variant="outline" size="sm" disabled={busy || !reviewValid} onClick={handleSaveFromReview} className="gap-1 text-xs h-8">
+                  {spin("save") || <Save className="h-3.5 w-3.5" />} Save draft
+                </Button>
+                <Button variant="primary" size="sm" disabled={busy || isPublishingToWebsite || !reviewValid} onClick={handlePublishFromReview}
+                  className="gap-1.5 text-xs h-8 font-semibold bg-orange-600 hover:bg-orange-700">
+                  {spin("publish") || <Sparkles className="h-3.5 w-3.5" />} Publish
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       <Dialog open={isReviseModalOpen} onOpenChange={setIsReviseModalOpen}>
         <DialogContent onClose={() => setIsReviseModalOpen(false)}>
           <DialogHeader>

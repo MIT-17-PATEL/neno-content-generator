@@ -175,6 +175,10 @@ export class WebsiteSyncService {
       readingTime: blogPayload.readingTime || "5 min read",
       thumb,
       thumbFull,
+      // Stock-photo attribution ("Photo by X on Pexels") for display under the cover; empty for other covers.
+      coverCredit: version.seoMetadata?.coverCredit?.text || "",
+      coverCreditPhotographerUrl: version.seoMetadata?.coverCredit?.photographerUrl || "",
+      coverCreditPhotoUrl: version.seoMetadata?.coverCredit?.photoUrl || "",
       buttonText: "Read Article",
       buttonLink: `/blog-single/${item.slug}`,
     };

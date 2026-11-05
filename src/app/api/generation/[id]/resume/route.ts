@@ -23,3 +23,6 @@ export async function POST(
     );
   }
 }
+
+// LLM / image / publish work can take minutes; 300s is the Vercel max with Fluid compute (Hobby).
+export const maxDuration = 300;
