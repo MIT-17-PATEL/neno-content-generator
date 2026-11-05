@@ -16,6 +16,7 @@ import {
   Sparkles,
   LogOut,
   UserCheck,
+  CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/auth-context";
@@ -30,6 +31,7 @@ const navigation = [
   { name: "Case Studies", href: "/case-studies", icon: Briefcase },
   { name: "Research", href: "/research", icon: Search },
   { name: "Media", href: "/media", icon: ImageIcon },
+  { name: "Automation", href: "/automation", icon: CalendarClock },
   { name: "Templates", href: "/templates", icon: Sliders },
   { name: "Trash", href: "/trash", icon: Trash2 },
   { name: "Settings", href: "/settings", icon: Settings },

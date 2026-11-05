@@ -7,6 +7,7 @@ import { suite as rateLimiterSuite } from "./rate-limiter.test";
 import { suite as coverImageSuite } from "./cover-image.test";
 import { suite as blogQualitySuite } from "./blog-quality.test";
 import { suite as stockPhotosSuite } from "./stock-photos.test";
+import { suite as autoBlogSuite } from "./auto-blog.test";
 import { TestSuite } from "./test-utils";
 
 const allSuites: TestSuite[] = [
@@ -19,6 +20,7 @@ const allSuites: TestSuite[] = [
   coverImageSuite,
   blogQualitySuite,
   stockPhotosSuite,
+  autoBlogSuite,
 ];
 
 async function runAllTests() {

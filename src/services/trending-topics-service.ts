@@ -15,6 +15,16 @@ export interface TrendingTopicItem {
   tagline?: string;
 }
 
+export interface LiveTrendItem {
+  title: string;
+  url: string; // the story's own link (or the HN discussion when it has none)
+  discussionUrl?: string;
+  summary?: string;
+  feed: "Hacker News" | "Dev.to";
+  score: number; // HN points / Dev.to reactions
+  publishedAt?: string;
+}
+
 export interface TrendingTopicsResponse {
   success: boolean;
   topics: string[];
@@ -111,7 +121,7 @@ export class TrendingTopicsService {
     const existingTopics = await this.getExistingLibraryTopics(params.workspaceId);
 
     // 1. Fetch live headlines from Hacker News and Dev.to in real-time
-    const liveInternetHeadlines = await this.fetchLiveInternetTechHeadlines();
+    const liveInternetHeadlines = await this.fetchRecentRelevantHeadlines();
 
     // 2. If AI is configured, try synthesizing fresh topics
     if (isAiConfigured()) {
@@ -227,7 +237,7 @@ export class TrendingTopicsService {
     return false;
   }
 
-  private static cleanHeadline(title: string): string {
+  static cleanHeadline(title: string): string {
     return title
       .replace(/^Show HN:\s*/i, "")
       .replace(/^Ask HN:\s*/i, "")
@@ -238,7 +248,7 @@ export class TrendingTopicsService {
       .trim();
   }
 
-  private static isMetaPost(title: string): string | boolean {
+  static isMetaPost(title: string): string | boolean {
     const lower = title.toLowerCase();
     return (
       lower.startsWith("what was your") ||
@@ -252,60 +262,85 @@ export class TrendingTopicsService {
   /**
    * Query public real-time tech feeds from the internet (Hacker News Front, Top Stories, Dev.to).
    */
-  private static async fetchLiveInternetTechHeadlines(): Promise<string[]> {
-    const headlines: string[] = [];
+  private static async fetchRecentRelevantHeadlines(): Promise<string[]> {
+    // Same filter as blog automation: last 7 days, no off-topic/meta posts, then LLM relevance to Neno's services (7+).
+    // Imported lazily: live-trends imports this service.
+    const { shortlistTrends, scoreTrends } = await import("@/lib/auto-blog/live-trends");
+    const recent = shortlistTrends(await this.fetchLiveTrendItems(), 15);
+    if (!recent.length || !isAiConfigured()) return recent.map((t) => t.title);
+    try {
+      return (await scoreTrends(recent)).filter((s) => s.score >= 7).sort((a, b) => b.score - a.score).map((s) => s.item.title);
+    } catch (err) {
+      // shortcut: keyword/date-filtered list without the LLM score when scoring fails; fine for suggestions
+      console.warn("Trend relevance scoring failed, using date/keyword-filtered headlines:", err);
+      return recent.map((t) => t.title);
+    }
+  }
+
+  /**
+   * Same feeds as the "Pull Live Trends" button, keeping each story's links and popularity
+   * (used by blog automation to ground posts in the real sources). Deduplicated by title.
+   */
+  static async fetchLiveTrendItems(): Promise<LiveTrendItem[]> {
+    type HnHit = { title?: string; url?: string; objectID?: string; points?: number; created_at?: string; story_text?: string };
+    type DevArticle = { title?: string; url?: string; description?: string; positive_reactions_count?: number; published_at?: string };
+    const items: LiveTrendItem[] = [];
 
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 4500);
+      const get = (url: string) =>
+        fetch(url, { signal: controller.signal, headers: { "User-Agent": "AIContentStudio/2.0" } })
+          .then((res) => (res.ok ? res.json() : null))
+          .catch(() => null);
+      const fromHn = (data: { hits?: HnHit[] } | null): LiveTrendItem[] =>
+        Array.isArray(data?.hits)
+          ? data!.hits.map((h) => {
+              const discussion = h.objectID ? `https://news.ycombinator.com/item?id=${h.objectID}` : undefined;
+              return {
+                title: h.title || "",
+                url: h.url || discussion || "",
+                discussionUrl: h.url ? discussion : undefined,
+                summary: h.story_text ? h.story_text.replace(/<[^>]+>/g, " ").slice(0, 500) : undefined,
+                feed: "Hacker News" as const,
+                score: h.points || 0,
+                publishedAt: h.created_at,
+              };
+            })
+          : [];
 
-      // Hacker News Front Page
-      const hnFrontPromise = fetch("https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=30", {
-        signal: controller.signal,
-        headers: { "User-Agent": "AIContentStudio/2.0" },
-      })
-        .then(async (res) => {
-          if (!res.ok) return [];
-          const data = await res.json();
-          return Array.isArray(data.hits) ? data.hits.map((h: { title?: string }) => h.title || "").filter((t: string) => t.length > 15) : [];
-        })
-        .catch(() => []);
-
-      // Hacker News Top Engineering Stories
-      const hnTopPromise = fetch("https://hn.algolia.com/api/v1/search?tags=story&numericFilters=points>50&hitsPerPage=30", {
-        signal: controller.signal,
-        headers: { "User-Agent": "AIContentStudio/2.0" },
-      })
-        .then(async (res) => {
-          if (!res.ok) return [];
-          const data = await res.json();
-          return Array.isArray(data.hits) ? data.hits.map((h: { title?: string }) => h.title || "").filter((t: string) => t.length > 15) : [];
-        })
-        .catch(() => []);
-
-      // Dev.to Top Technical Articles
-      const devPromise = fetch("https://dev.to/api/articles?per_page=25&top=7", {
-        signal: controller.signal,
-        headers: { "User-Agent": "AIContentStudio/2.0" },
-      })
-        .then(async (res) => {
-          if (!res.ok) return [];
-          const data = await res.json();
-          return Array.isArray(data) ? data.map((a: { title?: string }) => a.title || "").filter((t: string) => t.length > 15) : [];
-        })
-        .catch(() => []);
-
-      const [hnFront, hnTop, devTitles] = await Promise.all([hnFrontPromise, hnTopPromise, devPromise]);
+      // Hacker News Front Page, Hacker News Top Engineering Stories, Dev.to Top Technical Articles
+      const [hnFront, hnTop, dev] = await Promise.all([
+        get("https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=30"),
+        get("https://hn.algolia.com/api/v1/search?tags=story&numericFilters=points>50&hitsPerPage=30"),
+        get("https://dev.to/api/articles?per_page=25&top=7"),
+      ]);
       clearTimeout(timeout);
 
+      const devItems: LiveTrendItem[] = Array.isArray(dev)
+        ? (dev as DevArticle[]).map((a) => ({
+            title: a.title || "",
+            url: a.url || "",
+            summary: a.description || undefined,
+            feed: "Dev.to" as const,
+            score: a.positive_reactions_count || 0,
+            publishedAt: a.published_at,
+          }))
+        : [];
+
       // Combine and eliminate duplicates
-      const unique = Array.from(new Set([...hnFront, ...hnTop, ...devTitles]));
-      headlines.push(...unique);
+      const seen = new Set<string>();
+      for (const it of [...fromHn(hnFront), ...fromHn(hnTop), ...devItems]) {
+        if (it.title.length > 15 && it.url && !seen.has(it.title)) {
+          seen.add(it.title);
+          items.push(it);
+        }
+      }
     } catch {
       // Graceful ignore
     }
 
-    return headlines;
+    return items;
   }
 
   /**

@@ -361,6 +361,16 @@ export default function ContentDetailPage() {
     setIsReviewOpen(true);
   };
 
+  // ?review=1 (link in the auto-blog email / run history) opens Review & Publish once the post has loaded.
+  const [autoReviewDone, setAutoReviewDone] = useState(false);
+  useEffect(() => {
+    if (item && !autoReviewDone && new URLSearchParams(window.location.search).get("review") === "1") {
+      setAutoReviewDone(true);
+      openReview();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item, autoReviewDone]);
+
   const handleReviewTitleChange = (title: string) => {
     setReviewTitle(title);
     // Only auto-follow the title for unpublished posts the user hasn't hand-edited, so live URLs don't change silently.

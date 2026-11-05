@@ -32,9 +32,10 @@ class DatabaseClient {
         this.pool = new Pool({
           connectionString: cleanUrl,
           ssl: isRemote ? { rejectUnauthorized: false } : false,
-          max: 10,
+          // The auto-blog CLI sets DB_POOL_MAX=2 / DB_CONNECT_TIMEOUT_MS=15000; the web app keeps 10 / 10s.
+          max: Number(process.env.DB_POOL_MAX) || 10,
           idleTimeoutMillis: 30000,
-          connectionTimeoutMillis: 10000,
+          connectionTimeoutMillis: Number(process.env.DB_CONNECT_TIMEOUT_MS) || 10000,
         });
 
         this.pool.on("error", (err) => {
@@ -76,7 +77,20 @@ class DatabaseClient {
     if (!this.pool) {
       throw new Error("DATABASE_URL is not connected. Configure DATABASE_URL in .env.local to run live PostgreSQL queries.");
     }
-    return this.pool.query<T>(text, params);
+    // Connect explicitly so only a failed connect is retried (once), never a query that may have run.
+    let client;
+    try {
+      client = await this.pool.connect();
+    } catch (err) {
+      console.warn("PostgreSQL connect failed, retrying once:", err instanceof Error ? err.message : err);
+      await new Promise((r) => setTimeout(r, 2000));
+      client = await this.pool.connect();
+    }
+    try {
+      return await client.query<T>(text, params);
+    } finally {
+      client.release();
+    }
   }
 
   async close(): Promise<void> {

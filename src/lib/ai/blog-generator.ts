@@ -7,7 +7,7 @@ import { ImageStylePreset } from "@/types";
 import { dataStore } from "@/server/data-store";
 import { callAiStructured, isAiConfigured, getActiveAiModel } from "@/lib/ai/ai-client";
 import { WRITING_PROMPT, humanizeArticle, findBannedPhrases } from "@/lib/ai/humanize";
-import { generatePostVisuals, coverMetadata, BlogVisual } from "@/lib/ai/blog-visuals";
+import { generatePostVisuals, coverMetadata, BlogVisual, CoverType } from "@/lib/ai/blog-visuals";
 
 export interface BlogGenerationRequest {
   workspaceId: string;
@@ -21,6 +21,35 @@ export interface BlogGenerationRequest {
   customImagePrompt?: string;
   imageStyle?: ImageStylePreset;
   autoGenerateImage?: boolean;
+  /** Forces the cover type; "none" skips the cover (inline visuals still made). Default: the visual plan decides. */
+  coverType?: CoverType | "none";
+  /** Throw when the LLM is unavailable instead of falling back to the offline template article (used by automation). */
+  strict?: boolean;
+  /** Real sources (e.g. a live trend): facts must come from them; they replace the model's sources and end the post as "Sources". */
+  grounding?: GroundingSources;
+}
+
+export interface GroundingSources {
+  headline: string;
+  summary?: string;
+  /** Plain-text excerpt of the main source page, if it could be fetched. */
+  excerpt?: string;
+  sources: Array<{ url: string; title: string; publisher?: string }>;
+}
+
+/** Prompt block that pins facts, dates and product names to the given sources. */
+export function groundingPrompt(g: GroundingSources): string {
+  return `
+
+GROUNDING (required): This post responds to a current story: "${g.headline}".
+${g.summary ? `Summary: ${g.summary}\n` : ""}${g.excerpt ? `Source excerpt:\n"""\n${g.excerpt}\n"""\n` : ""}Sources:
+${g.sources.map((s) => `- ${s.title}: ${s.url}`).join("\n")}
+Facts, dates, numbers, company and product names about this story must come from the sources above. If a detail is not in them, leave it out or say it is unconfirmed; never invent one. Your own engineering experience and opinions are welcome, clearly as opinion. Return exactly these URLs in "sources".`;
+}
+
+/** "## Sources" section appended to a grounded post. */
+export function sourcesSection(g: GroundingSources): string {
+  return `## Sources\n\n${g.sources.map((s) => `- [${s.title.replace(/[[\]]/g, "")}](${s.url})${s.publisher ? ` (${s.publisher})` : ""}`).join("\n")}`;
 }
 
 export function polishArticleToHumanEditorial(rawMarkdown: string, topic: string, audience?: string): string {
@@ -143,13 +172,15 @@ You must return valid JSON matching this schema:
     { "url": "https://example.com/source", "title": "Empirical Research Citation", "publisher": "ACM / IEEE / USENIX", "notes": "Benchmark findings" }
   ]
 }`,
-          userPrompt: `Write a blog post on: "${params.topic}". Category: ${params.category}. Audience: ${params.audience}.`,
+          userPrompt: `Write a blog post on: "${params.topic}". Category: ${params.category}. Audience: ${params.audience}.${params.grounding ? groundingPrompt(params.grounding) : ""}`,
         });
       } catch (aiErr) {
+        if (params.strict) throw aiErr;
         console.warn("Live AI generation encountered error, utilizing resilient studio engine:", aiErr);
       }
     }
 
+    if (!rawOutput && params.strict) throw new Error("No AI API key configured (or the AI returned nothing).");
     if (!rawOutput) {
       // Heuristic High-Fidelity Studio Engine (Fallback / Offline Development)
       const cleanSlug = generateSlug(params.topic);
@@ -370,6 +401,11 @@ This architecture delivers clear returns for teams with independent deployment v
       const edited = isAiConfigured() ? (await humanizeArticle(polished)).article : polished;
       rawObj.article = polishArticleToHumanEditorial(edited, titleText, params.audience);
       bannedPhrases = findBannedPhrases(rawObj.article as string);
+      // After the banned-phrase check: source titles are quoted as-is and aren't our prose.
+      if (params.grounding?.sources.length) {
+        rawObj.article = `${(rawObj.article as string).replace(/\n#{2,3}\s*(Sources|References)\b[\s\S]*$/i, "").trim()}\n\n${sourcesSection(params.grounding)}`;
+        rawObj.sources = params.grounding.sources.map((s) => ({ url: s.url, title: s.title, publisher: s.publisher, notes: "Live trend source" }));
+      }
     }
 
     // Validate output with Zod schema
@@ -383,7 +419,7 @@ This architecture delivers clear returns for teams with independent deployment v
     // Visuals take up to ~2 min; on a 300s serverless limit, skip them when the text already took long so the
     // draft is still saved. The cover can then be made from Review & Publish (its own request).
     const VISUALS_BUDGET_MS = 150_000;
-    const tooLate = Date.now() - startedAt > VISUALS_BUDGET_MS;
+    const tooLate = Boolean(process.env.VERCEL) && Date.now() - startedAt > VISUALS_BUDGET_MS; // no time limit locally
     if (tooLate && params.autoGenerateImage !== false) {
       visualWarnings = ["Visuals were skipped because writing took long. Generate a cover in Review & Publish."];
     }
@@ -394,7 +430,7 @@ This architecture delivers clear returns for teams with independent deployment v
           article: validatedOutput.article,
           workspaceId: params.workspaceId,
           scene: params.customImagePrompt,
-        });
+        }, params.coverType);
         ({ cover, warnings: visualWarnings, plan: visualPlan } = v);
         inlineVisuals = v.inline;
       } catch (imgErr) {

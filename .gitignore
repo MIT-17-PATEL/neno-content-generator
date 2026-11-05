@@ -43,3 +43,6 @@ public/uploads/
 *.svg
 !/public/favicon.svg
 !/src/app/icon.svg
+
+# automated blog run logs
+/logs/

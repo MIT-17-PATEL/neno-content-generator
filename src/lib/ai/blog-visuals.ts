@@ -342,12 +342,18 @@ export function geminiKey(): string {
   return /^(AIza|AQ\.)/.test(k.trim()) ? k.trim() : "";
 }
 
+/** Last Gemini image 429 (ms epoch). Lets callers (blog automation) switch to diagram/stock covers. */
+export const imageQuota = { rateLimitedAt: 0 };
+const IMAGE_BACKOFF_MS = 30 * 60_000;
+
 export async function makePhoto(scene: string): Promise<Buffer | null> {
   const key = geminiKey();
   if (!key) {
     console.warn("[blog-visuals] no Gemini key (GEMINI_API_KEY) for photo generation");
     return null;
   }
+  // After a 429, don't spend another 90s request on the same exhausted quota for a while.
+  if (Date.now() - imageQuota.rateLimitedAt < IMAGE_BACKOFF_MS) return null;
   const model = process.env.IMAGE_MODEL || "gemini-2.5-flash-image";
   try {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
@@ -360,6 +366,7 @@ export async function makePhoto(scene: string): Promise<Buffer | null> {
       }),
     });
     if (!res.ok) {
+      if (res.status === 429) imageQuota.rateLimitedAt = Date.now();
       console.warn(`[blog-visuals] Gemini image HTTP ${res.status}:`, (await res.text()).slice(0, 300));
       return null;
     }
@@ -480,12 +487,13 @@ export async function coverFromUpload(dataUri: string, alt: string): Promise<Blo
   return { kind: "upload", dataUri: thumbFull, alt, hash: sha(thumbFull) };
 }
 
-export async function generatePostVisuals(post: PostForVisuals, coverType?: CoverType) {
+/** coverType "none": inline visuals only; the caller sets the cover itself (e.g. a stock photo once the draft exists). */
+export async function generatePostVisuals(post: PostForVisuals, coverType?: CoverType | "none") {
   const warnings: string[] = [];
   const plan = await planVisuals(post);
-  if (coverType) plan.cover.type = coverType;
+  if (coverType && coverType !== "none") plan.cover.type = coverType;
   const [cover, ...inline] = await Promise.all([
-    makeCover({ ...post, scene: post.scene || plan.cover.scene }, plan.cover.type, warnings),
+    coverType === "none" ? null : makeCover({ ...post, scene: post.scene || plan.cover.scene }, plan.cover.type, warnings),
     ...plan.inline.map((s) => makeInline(post, s, warnings)),
   ]);
   return { plan, cover, inline: inline.filter((v): v is BlogVisual => Boolean(v)), warnings };
